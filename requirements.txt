@@ -1,0 +1,15 @@
+# Core Dependencies
+pyyaml>=6.0.1
+python-dotenv>=1.0.1
+
+# Audio & DSP
+sounddevice>=0.4.6
+numpy>=1.23.5
+scipy>=1.10.1
+
+# AI & Speech Recognition (Phase 1 & 2)
+openwakeword>=0.6.0
+pywhispercpp>=1.1.0
+
+# Testing
+pytest>=7.4.0

@@ -1,0 +1,47 @@
+# Application Settings
+app:
+  name: "ZovaAI"
+  version: "0.1.0"
+  env: "development"
+
+# Logger Configuration
+logging:
+  level: "INFO"
+  log_file: "logs/assistant.log"
+  max_bytes: 10485760 # 10MB
+  backup_count: 5
+
+# Audio Input & Recording settings
+audio:
+  sample_rate: 16000
+  channels: 1
+  chunk_size: 1280 # 80ms of audio at 16kHz
+  device_index: null # Null uses default system recording device
+  silence_threshold: 0.03
+  silence_seconds: 1.5
+
+# Wake Word Detector Configuration
+wake_word:
+  model_name: "hey jarvis"
+  threshold: 0.5
+  inference_framework: "onnx"
+
+# Speech-to-Text (Whisper) Configuration
+speech_recognition:
+  model_name: "base.en"
+  model_dir: "models/whisper"
+  threads: 4
+
+# Text-to-Speech (Piper) Configuration
+speech_synthesis:
+  executable_path: "bin/piper/piper.exe"
+  model_path: "models/piper/en_US-lessac-medium.onnx"
+  config_path: "models/piper/en_US-lessac-medium.onnx.json"
+  output_dir: "temp/tts"
+
+# Setup Download Configuration
+setup:
+  piper_zip_url: "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
+  piper_voice_url: "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+  piper_voice_config_url: "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+  whisper_model_url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
