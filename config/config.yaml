@@ -52,3 +52,18 @@ setup:
   piper_voice_url: "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
   piper_voice_config_url: "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
   whisper_model_url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
+
+# Assistant Orchestrator Configuration
+assistant:
+  name: "Zova"
+  wake_response: "Yes?"
+  system_prompt: "prompts/system.txt"
+
+# LLM (Local Ollama) Configuration
+llm:
+  provider: "ollama"
+  host: "http://localhost:11434"
+  model: "qwen3"
+  timeout: 30.0
+  temperature: 0.7
+  max_tokens: 512

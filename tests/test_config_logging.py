@@ -54,6 +54,19 @@ def temp_config_file(tmp_path) -> Path:
         "tts": {
             "enabled": True,
             "executable_path": "bin/piper/piper.exe"
+        },
+        "assistant": {
+            "name": "Zova",
+            "wake_response": "Yes?",
+            "system_prompt": "prompts/system.txt"
+        },
+        "llm": {
+            "provider": "ollama",
+            "host": "http://localhost:11434",
+            "model": "qwen3",
+            "timeout": 30.0,
+            "temperature": 0.7,
+            "max_tokens": 512
         }
     }
     config_file = tmp_path / "config.yaml"
@@ -76,6 +89,8 @@ def test_config_load_success(temp_config_file, monkeypatch):
     assert config.audio.sample_rate == 16000
     assert config.wakeword.model_path == ""
     assert config.stt.language == "en"
+    assert config.assistant.name == "Zova"
+    assert config.llm.model == "qwen3"
 
 
 def test_config_missing_file_throws_error():

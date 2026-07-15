@@ -30,3 +30,12 @@ class WakeWordService(ABC):
         Returns:
             bool: True if running, False otherwise.
         """
+
+    @abstractmethod
+    def register_callback(self, callback) -> None:
+        """
+        Registers a callback function to be executed when the wake word is detected.
+        
+        Args:
+            callback: Callback function.
+        """

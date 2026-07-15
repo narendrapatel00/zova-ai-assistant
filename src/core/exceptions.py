@@ -36,3 +36,7 @@ class DependencyInjectionError(ZovaException):
 
 class SetupError(ZovaException):
     """Raised when download or setup of binary tools and models fails."""
+
+
+class LLMError(ZovaException):
+    """Raised when local LLM server connection or inference generation fails."""

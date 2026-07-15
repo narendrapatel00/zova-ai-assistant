@@ -23,6 +23,9 @@ from src.stt.recognizer import WhisperSpeechRecognizer
 from src.stt.service import SpeechRecognitionService
 from src.tts.synthesizer import PiperSpeechSynthesizer
 from src.tts.service import SpeechSynthesisService
+from src.llm.ollama_client import LLMClient, OllamaLLMClient
+from src.llm.service import LLMService
+from src.assistant.orchestrator import AssistantOrchestrator
 
 logger = get_logger("main")
 
@@ -123,6 +126,34 @@ class ZovaApp:
                 lambda c: SpeechSynthesisService(c.resolve(SpeechSynthesizer)),
                 singleton=True
             )
+
+            # 11. Register LLM Client
+            self.container.register(
+                LLMClient,
+                lambda c: OllamaLLMClient(c.resolve(Config)),
+                singleton=True
+            )
+
+            # 12. Register LLM Service
+            self.container.register(
+                LLMService,
+                lambda c: LLMService(c.resolve(LLMClient)),
+                singleton=True
+            )
+
+            # 13. Register Assistant Orchestrator
+            self.container.register(
+                AssistantOrchestrator,
+                lambda c: AssistantOrchestrator(
+                    c.resolve(Config),
+                    c.resolve(AudioRecorder),
+                    c.resolve(WakeWordService),
+                    c.resolve(SpeechRecognizer),
+                    c.resolve(LLMService),
+                    c.resolve(SpeechSynthesisService)
+                ),
+                singleton=True
+            )
             
             logger.info("Dependency Injection Container initialized.")
             logger.info("Scaffolding initialization complete. Ready for engines.")
@@ -178,6 +209,23 @@ class ZovaApp:
         try:
             synthesizer = self.container.resolve(SpeechSynthesizer)
             synthesizer.close()
+        # pylint: disable=broad-exception-caught
+        except Exception:
+            pass
+
+        # Close LLM Client Session
+        try:
+            llm_client = self.container.resolve(LLMClient)
+            llm_client.close()
+        # pylint: disable=broad-exception-caught
+        except Exception:
+            pass
+
+        # Close Assistant Orchestrator
+        try:
+            orchestrator = self.container.resolve(AssistantOrchestrator)
+            if orchestrator.is_running():
+                orchestrator.stop()
         # pylint: disable=broad-exception-caught
         except Exception:
             pass

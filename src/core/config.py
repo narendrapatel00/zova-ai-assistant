@@ -79,6 +79,23 @@ class SetupConfig:
     whisper_model_url: str
 
 
+@dataclass
+class AssistantConfig:
+    name: str
+    wake_response: str
+    system_prompt: Path
+
+
+@dataclass
+class LLMConfig:
+    provider: str
+    host: str
+    model: str
+    timeout: float
+    temperature: float
+    max_tokens: int
+
+
 # pylint: disable=too-many-instance-attributes
 class Config:
     """Config manager that loads configurations from config.yaml."""
@@ -105,6 +122,8 @@ class Config:
         self.stt: STTConfig
         self.tts: TTSConfig
         self.setup: SetupConfig
+        self.assistant: AssistantConfig
+        self.llm: LLMConfig
         
         self.load()
 
@@ -204,6 +223,27 @@ class Config:
             piper_voice_url=setup_data.get("piper_voice_url", ""),
             piper_voice_config_url=setup_data.get("piper_voice_config_url", ""),
             whisper_model_url=setup_data.get("whisper_model_url", "")
+        )
+        
+        # 8. Parse Assistant Config
+        ast_data = data.get("assistant", {})
+        self.assistant = AssistantConfig(
+            name=ast_data.get("name", "Zova"),
+            wake_response=ast_data.get("wake_response", "Yes?"),
+            system_prompt=self.resolve_path(ast_data.get(
+                "system_prompt", "prompts/system.txt"
+            ))
+        )
+        
+        # 9. Parse LLM Config
+        llm_data = data.get("llm", {})
+        self.llm = LLMConfig(
+            provider=llm_data.get("provider", "ollama"),
+            host=llm_data.get("host", "http://localhost:11434"),
+            model=llm_data.get("model", "qwen3"),
+            timeout=float(llm_data.get("timeout", 30.0)),
+            temperature=float(llm_data.get("temperature", 0.7)),
+            max_tokens=int(llm_data.get("max_tokens", 512))
         )
 
     def resolve_path(self, relative_or_absolute_path: str) -> Path:

@@ -13,7 +13,8 @@ from src.core.exceptions import (
     STTError,
     TTSError,
     DependencyInjectionError,
-    SetupError
+    SetupError,
+    LLMError
 )
 from src.core.logger import LoggerSetup, get_logger
 
@@ -28,6 +29,7 @@ __all__ = [
     "TTSError",
     "DependencyInjectionError",
     "SetupError",
+    "LLMError",
     "LoggerSetup",
     "get_logger"
 ]
