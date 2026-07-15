@@ -20,20 +20,27 @@ audio:
   silence_threshold: 0.03
   silence_seconds: 1.5
 
-# Wake Word Detector Configuration
-wake_word:
-  model_name: "hey jarvis"
+# Wake Word Configuration (openWakeWord)
+wakeword:
+  model_path: "" # Empty loads default 'hey_jarvis'
   threshold: 0.5
-  inference_framework: "onnx"
+  cooldown_seconds: 3.0
+  enabled: true
+  inference_interval_ms: 80
 
 # Speech-to-Text (Whisper) Configuration
-speech_recognition:
-  model_name: "base.en"
-  model_dir: "models/whisper"
+stt:
+  enabled: true
+  model_path: "models/whisper/ggml-base.en.bin"
+  language: "en"
   threads: 4
+  translate: false
+  beam_size: 5
+  temperature: 0.0
 
 # Text-to-Speech (Piper) Configuration
-speech_synthesis:
+tts:
+  enabled: true
   executable_path: "bin/piper/piper.exe"
   model_path: "models/piper/en_US-lessac-medium.onnx"
   config_path: "models/piper/en_US-lessac-medium.onnx.json"

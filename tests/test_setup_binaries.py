@@ -35,15 +35,15 @@ def mock_config(temp_dirs):
     config.project_root = temp_dirs["project_root"]
     
     # Mock Speech Recognition Configuration
-    config.speech_recognition = MagicMock()
-    config.speech_recognition.model_dir = temp_dirs["whisper_dir"]
+    config.stt = MagicMock()
+    config.stt.model_path = temp_dirs["whisper_dir"] / "ggml-base.en.bin"
     
     # Mock Speech Synthesis Configuration
-    config.speech_synthesis = MagicMock()
-    config.speech_synthesis.model_path = temp_dirs["piper_model_dir"] / "voice.onnx"
-    config.speech_synthesis.config_path = temp_dirs["piper_model_dir"] / "voice.onnx.json"
-    config.speech_synthesis.executable_path = temp_dirs["piper_bin_dir"] / "piper.exe"
-    config.speech_synthesis.output_dir = temp_dirs["temp_tts_dir"]
+    config.tts = MagicMock()
+    config.tts.model_path = temp_dirs["piper_model_dir"] / "voice.onnx"
+    config.tts.config_path = temp_dirs["piper_model_dir"] / "voice.onnx.json"
+    config.tts.executable_path = temp_dirs["piper_bin_dir"] / "piper.exe"
+    config.tts.output_dir = temp_dirs["temp_tts_dir"]
     
     # Mock Setup Configuration URLs
     config.setup = MagicMock()

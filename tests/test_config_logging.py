@@ -35,14 +35,24 @@ def temp_config_file(tmp_path) -> Path:
             "channels": 1,
             "chunk_size": 1024
         },
-        "wake_word": {
-            "model_name": "hey jarvis",
-            "threshold": 0.5
+        "wakeword": {
+            "model_path": "",
+            "threshold": 0.5,
+            "cooldown_seconds": 3.0,
+            "enabled": True,
+            "inference_interval_ms": 80
         },
-        "speech_recognition": {
-            "model_name": "tiny.en"
+        "stt": {
+            "enabled": True,
+            "model_path": "models/whisper/ggml-base.en.bin",
+            "language": "en",
+            "threads": 4,
+            "translate": False,
+            "beam_size": 5,
+            "temperature": 0.0
         },
-        "speech_synthesis": {
+        "tts": {
+            "enabled": True,
             "executable_path": "bin/piper/piper.exe"
         }
     }
@@ -64,8 +74,8 @@ def test_config_load_success(temp_config_file, monkeypatch):
     assert config.app.version == "0.0.1"
     assert config.app.env == "testing"
     assert config.audio.sample_rate == 16000
-    assert config.wake_word.model_name == "hey jarvis"
-    assert config.speech_recognition.model_name == "tiny.en"
+    assert config.wakeword.model_path == ""
+    assert config.stt.language == "en"
 
 
 def test_config_missing_file_throws_error():

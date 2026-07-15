@@ -33,10 +33,10 @@ class BinarySetupManager:
     def ensure_directories(self) -> None:
         """Creates target directories for models, binaries, and temporary files."""
         dirs_to_create = [
-            self.config.speech_recognition.model_dir,
-            self.config.speech_synthesis.model_path.parent,
-            self.config.speech_synthesis.executable_path.parent,
-            self.config.speech_synthesis.output_dir,
+            self.config.stt.model_path.parent,
+            self.config.tts.model_path.parent,
+            self.config.tts.executable_path.parent,
+            self.config.tts.output_dir,
             self.config.project_root / "temp"
         ]
         
@@ -251,7 +251,7 @@ class BinarySetupManager:
         self.ensure_directories()
         
         # 1. Download Whisper model (ggml-base.en.bin)
-        whisper_dest = self.config.speech_recognition.model_dir / "ggml-base.en.bin"
+        whisper_dest = self.config.stt.model_path
         self.download_file(
             url=self.config.setup.whisper_model_url,
             dest_path=whisper_dest,
@@ -259,7 +259,7 @@ class BinarySetupManager:
         )
         
         # 2. Download Piper voice ONNX model
-        piper_voice_dest = self.config.speech_synthesis.model_path
+        piper_voice_dest = self.config.tts.model_path
         self.download_file(
             url=self.config.setup.piper_voice_url,
             dest_path=piper_voice_dest,
@@ -267,7 +267,7 @@ class BinarySetupManager:
         )
         
         # 3. Download Piper voice config JSON
-        piper_config_dest = self.config.speech_synthesis.config_path
+        piper_config_dest = self.config.tts.config_path
         self.download_file(
             url=self.config.setup.piper_voice_config_url,
             dest_path=piper_config_dest,
@@ -276,8 +276,8 @@ class BinarySetupManager:
         
         # 4. Download and extract Piper executable
         piper_zip_path = self.config.project_root / "temp" / "piper_windows.zip"
-        piper_bin_dir = self.config.speech_synthesis.executable_path.parent
-        piper_exe_path = self.config.speech_synthesis.executable_path
+        piper_bin_dir = self.config.tts.executable_path.parent
+        piper_exe_path = self.config.tts.executable_path
         
         if not piper_exe_path.exists():
             self.download_file(
@@ -301,6 +301,15 @@ class BinarySetupManager:
             raise SetupError(
                 f"Piper executable was not found at {piper_exe_path} after extraction."
             )
+
+        # 5. Pre-download openWakeWord models
+        logger.info("Pre-downloading openWakeWord default models...")
+        try:
+            import openwakeword  # type: ignore[import-untyped]
+            openwakeword.utils.download_models()
+            logger.info("openWakeWord models downloaded and cached.")
+        except Exception as e:
+            logger.warning("Failed to pre-download openWakeWord models: %s", e)
             
         logger.info("=========================================")
         logger.info("ZovaAI setup completed successfully!")

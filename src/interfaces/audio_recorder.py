@@ -1,11 +1,25 @@
 """
-Abstract Interface for Audio Recorder.
-Defines contracts for real-time audio chunk capture and audio recording storage.
+Abstract Interface for Audio Recorder and Listeners.
+Defines contracts for real-time audio chunk capture, audio recording storage,
+and the Observer (Pub/Sub) subscription pattern.
 """
 
 from abc import ABC, abstractmethod
 from pathlib import Path
 import numpy as np
+
+
+class AudioListener(ABC):
+    """Abstract interface defining the contract for audio stream consumers."""
+
+    @abstractmethod
+    def on_audio_chunk(self, chunk: np.ndarray) -> None:
+        """
+        Callback triggered when a new raw audio chunk is captured.
+        
+        Args:
+            chunk: 1D numpy array representing 16kHz mono audio samples.
+        """
 
 
 class AudioRecorder(ABC):
@@ -36,7 +50,6 @@ class AudioRecorder(ABC):
     def get_audio_chunk(self) -> np.ndarray:
         """
         Fetches the latest block of audio data from the microphone.
-        Used for real-time wake word detection stream feed.
         
         Returns:
             np.ndarray: Audio data as 1D array of 16-bit 16kHz PCM samples.
@@ -52,6 +65,24 @@ class AudioRecorder(ABC):
         
         Returns:
             bool: True if recording, False otherwise.
+        """
+
+    @abstractmethod
+    def subscribe(self, listener: AudioListener) -> None:
+        """
+        Subscribes an AudioListener to receive real-time audio frames.
+        
+        Args:
+            listener: Concrete listener subclass instance.
+        """
+
+    @abstractmethod
+    def unsubscribe(self, listener: AudioListener) -> None:
+        """
+        Unsubscribes a previously registered AudioListener.
+        
+        Args:
+            listener: Concrete listener subclass instance.
         """
 
     @abstractmethod

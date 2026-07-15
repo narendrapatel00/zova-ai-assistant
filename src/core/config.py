@@ -44,20 +44,27 @@ class AudioConfig:
 
 @dataclass
 class WakeWordConfig:
-    model_name: str
+    model_path: str
     threshold: float
-    inference_framework: str
+    cooldown_seconds: float
+    enabled: bool
+    inference_interval_ms: int
 
 
 @dataclass
 class STTConfig:
-    model_name: str
-    model_dir: Path
+    enabled: bool
+    model_path: Path
+    language: str
     threads: int
+    translate: bool
+    beam_size: int
+    temperature: float
 
 
 @dataclass
 class TTSConfig:
+    enabled: bool
     executable_path: Path
     model_path: Path
     config_path: Path
@@ -94,9 +101,9 @@ class Config:
         self.app: AppConfig
         self.logging: LoggingConfig
         self.audio: AudioConfig
-        self.wake_word: WakeWordConfig
-        self.speech_recognition: STTConfig
-        self.speech_synthesis: TTSConfig
+        self.wakeword: WakeWordConfig
+        self.stt: STTConfig
+        self.tts: TTSConfig
         self.setup: SetupConfig
         
         self.load()
@@ -149,26 +156,33 @@ class Config:
         )
         
         # 4. Parse Wake Word Config
-        ww_data = data.get("wake_word", {})
-        self.wake_word = WakeWordConfig(
-            model_name=ww_data.get("model_name", "hey jarvis"),
+        ww_data = data.get("wakeword", {})
+        self.wakeword = WakeWordConfig(
+            model_path=ww_data.get("model_path", ""),
             threshold=ww_data.get("threshold", 0.5),
-            inference_framework=ww_data.get("inference_framework", "onnx")
+            cooldown_seconds=ww_data.get("cooldown_seconds", 3.0),
+            enabled=ww_data.get("enabled", True),
+            inference_interval_ms=ww_data.get("inference_interval_ms", 80)
         )
         
         # 5. Parse STT Config
-        stt_data = data.get("speech_recognition", {})
-        self.speech_recognition = STTConfig(
-            model_name=stt_data.get("model_name", "base.en"),
-            model_dir=self.resolve_path(stt_data.get(
-                "model_dir", "models/whisper"
+        stt_data = data.get("stt", {})
+        self.stt = STTConfig(
+            enabled=stt_data.get("enabled", True),
+            model_path=self.resolve_path(stt_data.get(
+                "model_path", "models/whisper/ggml-base.en.bin"
             )),
-            threads=stt_data.get("threads", 4)
+            language=stt_data.get("language", "en"),
+            threads=stt_data.get("threads", 4),
+            translate=stt_data.get("translate", False),
+            beam_size=stt_data.get("beam_size", 5),
+            temperature=stt_data.get("temperature", 0.0)
         )
         
         # 6. Parse TTS Config
-        tts_data = data.get("speech_synthesis", {})
-        self.speech_synthesis = TTSConfig(
+        tts_data = data.get("tts", {})
+        self.tts = TTSConfig(
+            enabled=tts_data.get("enabled", True),
             executable_path=self.resolve_path(tts_data.get(
                 "executable_path", "bin/piper/piper.exe"
             )),

@@ -11,6 +11,18 @@ from src.core.config import Config
 from src.core.di import DIContainer
 from src.core.logger import LoggerSetup, get_logger
 from src.core.exceptions import ZovaException
+from src.interfaces.audio_recorder import AudioRecorder
+from src.interfaces.wake_word_detector import WakeWordDetector
+from src.interfaces.speech_recognizer import SpeechRecognizer
+from src.interfaces.speech_synthesizer import SpeechSynthesizer
+from src.audio.recorder import SounddeviceAudioRecorder
+from src.wakeword.interfaces import WakeWordService
+from src.wakeword.engine import OpenWakeWordDetector
+from src.wakeword.service import WakeWordListeningService
+from src.stt.recognizer import WhisperSpeechRecognizer
+from src.stt.service import SpeechRecognitionService
+from src.tts.synthesizer import PiperSpeechSynthesizer
+from src.tts.service import SpeechSynthesisService
 
 logger = get_logger("main")
 
@@ -59,6 +71,59 @@ class ZovaApp:
             # 3. Register core configuration with DI Container
             self.container.register(Config, self.config, singleton=True)
             
+            # 4. Register concrete audio recorder implementation
+            self.container.register(
+                AudioRecorder,
+                lambda c: SounddeviceAudioRecorder(c.resolve(Config)),
+                singleton=True
+            )
+
+            # 5. Register concrete wake word detector
+            self.container.register(
+                WakeWordDetector,
+                lambda c: OpenWakeWordDetector(c.resolve(Config)),
+                singleton=True
+            )
+
+            # 6. Register concrete wake word listening service
+            self.container.register(
+                WakeWordService,
+                lambda c: WakeWordListeningService(
+                    c.resolve(Config),
+                    c.resolve(AudioRecorder),
+                    c.resolve(WakeWordDetector)
+                ),
+                singleton=True
+            )
+
+            # 7. Register concrete speech recognizer
+            self.container.register(
+                SpeechRecognizer,
+                lambda c: WhisperSpeechRecognizer(c.resolve(Config)),
+                singleton=True
+            )
+
+            # 8. Register speech recognition service
+            self.container.register(
+                SpeechRecognitionService,
+                lambda c: SpeechRecognitionService(c.resolve(SpeechRecognizer)),
+                singleton=True
+            )
+
+            # 9. Register concrete speech synthesizer
+            self.container.register(
+                SpeechSynthesizer,
+                lambda c: PiperSpeechSynthesizer(c.resolve(Config)),
+                singleton=True
+            )
+
+            # 10. Register speech synthesis service
+            self.container.register(
+                SpeechSynthesisService,
+                lambda c: SpeechSynthesisService(c.resolve(SpeechSynthesizer)),
+                singleton=True
+            )
+            
             logger.info("Dependency Injection Container initialized.")
             logger.info("Scaffolding initialization complete. Ready for engines.")
             logger.info("=========================================")
@@ -80,9 +145,49 @@ class ZovaApp:
             "ZovaAI running in idle mode. Voice loops will be implemented in Milestone 2."
         )
 
+    def close(self) -> None:
+        """Gracefully stops all background threads and releases audio card hardware locks."""
+        logger.info("Shutting down ZovaAI application...")
+        
+        # Stop background wake-word listener thread
+        try:
+            ww_service = self.container.resolve(WakeWordService)
+            if ww_service.is_running():
+                ww_service.stop()
+        # pylint: disable=broad-exception-caught
+        except Exception:
+            pass
+
+        # Stop background audio recorder stream
+        try:
+            recorder = self.container.resolve(AudioRecorder)
+            recorder.close()
+        # pylint: disable=broad-exception-caught
+        except Exception:
+            pass
+
+        # Close speech recognizer context
+        try:
+            recognizer = self.container.resolve(SpeechRecognizer)
+            recognizer.close()
+        # pylint: disable=broad-exception-caught
+        except Exception:
+            pass
+
+        # Close speech synthesizer context
+        try:
+            synthesizer = self.container.resolve(SpeechSynthesizer)
+            synthesizer.close()
+        # pylint: disable=broad-exception-caught
+        except Exception:
+            pass
+
+        logger.info("ZovaAI shutdown complete.")
+
 
 def main() -> None:
     """Global main function parsing command line arguments and executing the application."""
+    app = None
     try:
         app = ZovaApp()
         app.initialize()
@@ -94,6 +199,9 @@ def main() -> None:
     except Exception as e:
         print(f"CRITICAL SYSTEM CRASH: {str(e)}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        if app:
+            app.close()
 
 
 if __name__ == "__main__":
