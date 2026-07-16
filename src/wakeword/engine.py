@@ -22,10 +22,10 @@ class OpenWakeWordDetector(WakeWordDetector):
     def __init__(self, config: Config):
         """
         Initializes the openWakeWord inference model.
-        
+
         Args:
             config: Loaded application configuration manager.
-            
+
         Raises:
             WakeWordError: If model file cannot be found or ONNX session fails.
         """
@@ -34,7 +34,7 @@ class OpenWakeWordDetector(WakeWordDetector):
         self.threshold = config.wakeword.threshold
         self._oww_model: Optional[Model] = None
         self.model_name = "hey_jarvis"
-        
+
         self._load_model()
 
     def _load_model(self) -> None:
@@ -48,11 +48,11 @@ class OpenWakeWordDetector(WakeWordDetector):
                 resolved_path = self.config.resolve_path(self.model_path)
                 if not resolved_path.exists():
                     raise WakeWordError(f"Custom wake-word model path not found: {resolved_path}")
-                
+
                 logger.info("Loading custom wake-word model path: %s", resolved_path)
                 self._oww_model = Model(wakeword_models=[str(resolved_path)])
                 self.model_name = resolved_path.stem
-                
+
             logger.info("openWakeWord model loaded successfully.")
         except Exception as e:
             if not isinstance(e, WakeWordError):
@@ -62,20 +62,20 @@ class OpenWakeWordDetector(WakeWordDetector):
     def detect(self, chunk: np.ndarray) -> bool:
         """
         Runs local ONNX inference on the audio chunk.
-        
+
         Args:
             chunk: Numpy array of 1280 samples (16kHz 16-bit PCM).
-            
+
         Returns:
             bool: True if prediction exceeds threshold and cooldown is inactive.
         """
         if not self._oww_model:
             raise WakeWordError("openWakeWord model is not loaded.")
-            
+
         try:
             # openWakeWord predict returns a dict of model names mapping to score floats
             prediction = self._oww_model.predict(chunk)
-            
+
             for name, score in prediction.items():
                 if score >= self.threshold:
                     logger.info(
@@ -84,7 +84,7 @@ class OpenWakeWordDetector(WakeWordDetector):
                     )
                     return True
             return False
-            
+
         except Exception as e:
             raise WakeWordError(f"ONNX inference execution failed: {str(e)}") from e
 

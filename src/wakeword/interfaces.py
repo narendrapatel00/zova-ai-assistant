@@ -26,7 +26,7 @@ class WakeWordService(ABC):
     def is_running(self) -> bool:
         """
         Checks if the background listening thread is active.
-        
+
         Returns:
             bool: True if running, False otherwise.
         """
@@ -35,7 +35,7 @@ class WakeWordService(ABC):
     def register_callback(self, callback) -> None:
         """
         Registers a callback function to be executed when the wake word is detected.
-        
+
         Args:
             callback: Callback function.
         """

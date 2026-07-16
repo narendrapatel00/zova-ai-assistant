@@ -24,13 +24,13 @@ class LoggerSetup:
     ) -> logging.Logger:
         """
         Initializes the logging system with console and rotating file output.
-        
+
         Args:
             log_level: The logging level name (e.g. DEBUG, INFO, WARNING, ERROR).
             log_file: Path to the log file. If none, only console logging is active.
             max_bytes: Maximum size of a log file before rotation.
             backup_count: Number of historical log files to keep.
-            
+
         Returns:
             The configured root Logger instance.
         """
@@ -96,10 +96,10 @@ class LoggerSetup:
 def get_logger(name: str) -> logging.Logger:
     """
     Utility function to retrieve a logger with a given name.
-    
+
     Args:
         name: Name of the logger module.
-        
+
     Returns:
         A logging.Logger instance.
     """

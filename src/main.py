@@ -40,7 +40,7 @@ class ZovaApp:
     def __init__(self, config_path: Optional[str] = None):
         """
         Initializes the application, container, and configuration.
-        
+
         Args:
             config_path: Custom path to config.yaml (optional).
         """
@@ -54,14 +54,14 @@ class ZovaApp:
         1. Loads settings from configuration file.
         2. Configures console and rotating file logger handlers.
         3. Configures dependency injection registrations.
-        
+
         Raises:
             ZovaException: If initialization sequence fails.
         """
         try:
             # 1. Load configuration
             self.config = Config(self.config_path)
-            
+
             # 2. Setup logging based on configuration
             LoggerSetup.initialize(
                 log_level=self.config.logging.level,
@@ -69,12 +69,12 @@ class ZovaApp:
                 max_bytes=self.config.logging.max_bytes,
                 backup_count=self.config.logging.backup_count
             )
-            
+
             logger.info("=========================================")
             logger.info("Initializing ZovaAI Core Application...")
             logger.info("Environment: %s", self.config.app.env)
             logger.info("Version: %s", self.config.app.version)
-            
+
             # 3. Register core configuration with DI Container
             self.container.register(Config, self.config, singleton=True)
 
@@ -90,11 +90,11 @@ class ZovaApp:
             # Resolve event bus and metrics to connect plugins
             event_bus = self.container.resolve(EventBus)
             metrics = self.container.resolve(MetricsCollector)
-            
+
             # Wire subscribers
             LoggingSubscriber(event_bus).register()
             MetricsSubscriber(event_bus, metrics).register()
-            
+
             # 7. Register concrete audio recorder implementation
             self.container.register(
                 AudioRecorder,
@@ -177,11 +177,11 @@ class ZovaApp:
                 ),
                 singleton=True
             )
-            
+
             logger.info("Dependency Injection Container initialized.")
             logger.info("Scaffolding initialization complete. Ready for engines.")
             logger.info("=========================================")
-            
+
         except ZovaException as ze:
             # Re-raise known ZovaExceptions
             raise ze
@@ -202,7 +202,7 @@ class ZovaApp:
     def close(self) -> None:
         """Gracefully stops all background threads and releases audio card hardware locks."""
         logger.info("Shutting down ZovaAI application...")
-        
+
         # Stop background wake-word listener thread
         try:
             ww_service = self.container.resolve(WakeWordService)

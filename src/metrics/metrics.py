@@ -25,7 +25,7 @@ class MetricsCollector:
     def start_timer(self, name: str) -> None:
         """
         Starts a timer for a metric.
-        
+
         Args:
             name: The metric name identifier.
         """
@@ -36,10 +36,10 @@ class MetricsCollector:
     def stop_timer(self, name: str) -> Optional[float]:
         """
         Stops a timer for a metric, computing and storing the duration.
-        
+
         Args:
             name: The metric name identifier.
-            
+
         Returns:
             Optional[float]: Calculated duration in seconds, or None if timer not started.
         """
@@ -49,7 +49,7 @@ class MetricsCollector:
             if start_time is None:
                 logger.warning("Attempted to stop timer '%s' which was never started.", name)
                 return None
-            
+
             duration = stop_time - start_time
             self._metrics[name] = duration
             logger.debug("Performance timer stopped: %s (Duration: %.4fs)", name, duration)
@@ -58,7 +58,7 @@ class MetricsCollector:
     def set_value(self, name: str, value: float) -> None:
         """
         Manually sets a metric to a specific numeric value.
-        
+
         Args:
             name: Metric name identifier.
             value: Numerical metric value to store.
@@ -69,10 +69,10 @@ class MetricsCollector:
     def get_value(self, name: str) -> Optional[float]:
         """
         Retrieves a stored metric value.
-        
+
         Args:
             name: Metric identifier.
-            
+
         Returns:
             Optional[float]: Stored value, or None if not found.
         """
@@ -82,7 +82,7 @@ class MetricsCollector:
     def get_all(self) -> Dict[str, float]:
         """
         Retrieves a copy of all accumulated metrics.
-        
+
         Returns:
             Dict[str, float]: Stored key-value metrics dictionary.
         """

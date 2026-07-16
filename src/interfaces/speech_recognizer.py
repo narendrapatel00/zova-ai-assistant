@@ -14,13 +14,13 @@ class SpeechRecognizer(ABC):
     def transcribe(self, audio_path: Path) -> str:
         """
         Transcribes the speech recorded in the specified audio WAV file to plain text.
-        
+
         Args:
             audio_path: Absolute Path to the WAV audio file.
-            
+
         Returns:
             str: Transcribed text output.
-            
+
         Raises:
             STTError: If transcription execution or model processing fails.
         """

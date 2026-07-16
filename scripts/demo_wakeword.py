@@ -77,9 +77,9 @@ def main() -> None:
         print("\n[Step 2/3] Wake word detected! Beginning voice command capture...")
         print("Speak your command now...")
         print("Recording will stop automatically after 1.5s of silence...")
-        
+
         recorder.start_recording()
-        
+
         # Read chunks from the stream to keep the recorder callback feeding VAD
         while recorder.is_recording():
             recorder.get_audio_chunk()

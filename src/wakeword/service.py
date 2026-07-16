@@ -34,7 +34,7 @@ class WakeWordListeningService(WakeWordService, AudioListener):
     ):
         """
         Initializes the wake word service.
-        
+
         Args:
             config: Loaded application configuration manager.
             audio_recorder: Resolved AudioRecorder singleton.
@@ -58,7 +58,7 @@ class WakeWordListeningService(WakeWordService, AudioListener):
     def _ensure_activation_sound(self) -> Path:
         """
         Generates a default offline 880Hz confirmation beep if assets are missing.
-        
+
         Returns:
             Path: The file path pointing to the activation WAV.
         """
@@ -72,7 +72,7 @@ class WakeWordListeningService(WakeWordService, AudioListener):
             duration = 0.15
             frequency = 880.0
             t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-            
+
             # Sine wave with gentle fade out to prevent speaker clicking
             audio_data = np.sin(2 * np.pi * frequency * t) * 0.25
             fade_len = int(sample_rate * 0.02)
@@ -91,13 +91,13 @@ class WakeWordListeningService(WakeWordService, AudioListener):
                 logger.info("Default confirmation WAV created.")
             except Exception as e:
                 logger.error("Failed to generate offline activation sound: %s", e)
-                
+
         return sound_path
 
     def register_callback(self, callback: Callable[[], None]) -> None:
         """
         Registers the event handler function to execute on wake word detection.
-        
+
         Args:
             callback: Function to run without arguments.
         """
@@ -123,10 +123,10 @@ class WakeWordListeningService(WakeWordService, AudioListener):
                     self._incoming_queue.get_nowait()
                 except queue.Empty:
                     break
-                    
+
             # Subscribe to the AudioRecorder frame stream
             self.audio_recorder.subscribe(self)
-            
+
             self._thread = threading.Thread(
                 target=self._listen_loop,
                 name="WakeWordListenerThread",
@@ -142,17 +142,17 @@ class WakeWordListeningService(WakeWordService, AudioListener):
             if not self._running:
                 return
             self._running = False
-            
+
             # Unsubscribe from the AudioRecorder frame stream
             try:
                 self.audio_recorder.unsubscribe(self)
             # pylint: disable=broad-exception-caught
             except Exception as e:
                 logger.warning("Error unsubscribing from audio stream: %s", e)
-                
+
             thread_to_join = self._thread
             self._thread = None
-            
+
         if thread_to_join:
             logger.info("Stopping wake-word listener service...")
             # Thread will unblock on queue timeout and exit
@@ -167,7 +167,7 @@ class WakeWordListeningService(WakeWordService, AudioListener):
     def on_audio_chunk(self, chunk: np.ndarray) -> None:
         """
         Observer callback called by AudioRecorder when a new chunk is captured.
-        
+
         Args:
             chunk: 1D raw audio array chunk.
         """
@@ -207,13 +207,13 @@ class WakeWordListeningService(WakeWordService, AudioListener):
                     if current_time - last_trigger_time >= self.cooldown:
                         logger.info("Wake-word detected! (confidence above threshold)")
                         last_trigger_time = current_time
-                        
+
                         # Play confirmation chirp
                         try:
                             play_wav(self._sound_path)
                         except AudioError as ae:
                             logger.error("Failed to play confirmation sound: %s", ae.message)
-                        
+
                         # Fire registered event handler
                         with self._lock:
                             cb = self._callback

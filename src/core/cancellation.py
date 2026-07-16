@@ -22,7 +22,7 @@ class CancellationToken:
     def is_cancelled(self) -> bool:
         """
         Checks if a cancellation signal has been published.
-        
+
         Returns:
             bool: True if cancelled, False otherwise.
         """

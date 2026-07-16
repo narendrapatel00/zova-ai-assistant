@@ -21,7 +21,7 @@ class EventBus:
     def __init__(self, max_workers: int = 5):
         """
         Initializes the event bus.
-        
+
         Args:
             max_workers: Size of the thread pool used for async callbacks.
         """
@@ -41,7 +41,7 @@ class EventBus:
             if self._running:
                 return
             self._running = True
-            
+
         self._dispatcher_thread = threading.Thread(
             target=self._dispatch_loop,
             name="EventBusDispatcher",
@@ -56,10 +56,10 @@ class EventBus:
             if not self._running:
                 return
             self._running = False
-            
+
         # Put sentinel to unblock queue.get()
         self._queue.put(None)
-        
+
         # Shutdown executor
         self._executor.shutdown(wait=True)
         logger.info("Event Bus thread pool executor shutdown.")
@@ -67,7 +67,7 @@ class EventBus:
     def join(self, timeout: float = 1.0) -> None:
         """
         Waits for the dispatcher thread to terminate.
-        
+
         Args:
             timeout: Maximum seconds to block.
         """
@@ -78,7 +78,7 @@ class EventBus:
     def is_running(self) -> bool:
         """
         Checks if dispatcher thread is active.
-        
+
         Returns:
             bool: True if active, False otherwise.
         """
@@ -91,7 +91,7 @@ class EventBus:
     def subscribe(self, event_type: Type[Event], callback: Callable[[Any], None]) -> None:
         """
         Subscribes a callback to an event type.
-        
+
         Args:
             event_type: Dataclass type inheriting from Event.
             callback: Function to invoke when event is matched.
@@ -110,7 +110,7 @@ class EventBus:
     def unsubscribe(self, event_type: Type[Event], callback: Callable[[Any], None]) -> None:
         """
         Unsubscribes a callback from an event type.
-        
+
         Args:
             event_type: Event type class.
             callback: Registered callback function.
@@ -128,7 +128,7 @@ class EventBus:
     def publish(self, event: Event) -> None:
         """
         Pushes an event into the FIFO queue for dispatching.
-        
+
         Args:
             event: Event object instance.
         """
@@ -145,15 +145,15 @@ class EventBus:
                     # Shutdown sentinel received
                     self._queue.task_done()
                     break
-                
+
                 event_type = type(event)
                 with self._lock:
                     listeners = self._listeners.get(event_type, []).copy()
-                
+
                 # Submit each listener callback to run asynchronously in thread pool
                 for listener in listeners:
                     self._executor.submit(self._safe_execute, listener, event)
-                
+
                 self._queue.task_done()
             except Exception as e:
                 logger.error("Error in EventBus dispatch loop: %s", e)

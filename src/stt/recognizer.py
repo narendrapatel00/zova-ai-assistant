@@ -25,10 +25,10 @@ class WhisperSpeechRecognizer(SpeechRecognizer):
     def __init__(self, config: Config):
         """
         Initializes the Whisper model context.
-        
+
         Args:
             config: Loaded application configuration manager.
-            
+
         Raises:
             STTError: If model cannot be loaded or initialized.
         """
@@ -41,7 +41,7 @@ class WhisperSpeechRecognizer(SpeechRecognizer):
         self.temperature = config.stt.temperature
 
         self._model: Optional[Model] = None
-        
+
         if self.enabled:
             self._load_model()
         else:
@@ -53,20 +53,20 @@ class WhisperSpeechRecognizer(SpeechRecognizer):
             resolved_path = self.config.resolve_path(str(self.model_path))
             if not resolved_path.exists():
                 raise STTError(f"Whisper model file not found: {resolved_path}")
-            
+
             logger.info("Loading Whisper.cpp model from: %s", resolved_path)
             start_time = time.time()
-            
+
             # Initialize model context (reused across requests)
             self._model = Model(
                 str(resolved_path),
                 n_threads=self.threads,
                 redirect_whispercpp_logs_to=False
             )
-            
+
             latency = time.time() - start_time
             logger.info("Whisper model loaded successfully (%.2fs)", latency)
-            
+
         except Exception as e:
             if not isinstance(e, STTError):
                 raise STTError(f"Whisper initialization failure: {str(e)}") from e
@@ -75,19 +75,19 @@ class WhisperSpeechRecognizer(SpeechRecognizer):
     def transcribe(self, audio_path: Path) -> str:
         """
         Transcribes the speech recorded in the specified WAV file.
-        
+
         Args:
             audio_path: Absolute Path to 16kHz mono WAV file.
-            
+
         Returns:
             str: Transcribed text output.
-            
+
         Raises:
             STTError: If transcription execution or model processing fails.
         """
         if not self.enabled:
             raise STTError("SpeechRecognizer is disabled.")
-            
+
         if not self._model:
             raise STTError("Whisper speech recognizer is not initialized.")
 
@@ -101,7 +101,7 @@ class WhisperSpeechRecognizer(SpeechRecognizer):
                 n_channels = w.getnchannels()
                 sample_rate = w.getframerate()
                 n_frames = w.getnframes()
-                
+
                 if sample_rate != 16000:
                     raise STTError(
                         f"Unsupported sample rate: {sample_rate}Hz. "
@@ -123,7 +123,7 @@ class WhisperSpeechRecognizer(SpeechRecognizer):
         try:
             logger.info("Transcription started on file: %s", audio_path.name)
             start_time = time.time()
-            
+
             # Execute transcription parameters
             segments = self._model.transcribe(
                 str(audio_path),
@@ -131,15 +131,15 @@ class WhisperSpeechRecognizer(SpeechRecognizer):
                 beam_size=self.beam_size,
                 temperature=self.temperature
             )
-            
+
             latency = time.time() - start_time
             transcribed_text = "".join([s.text for s in segments]).strip()
-            
+
             logger.info("Transcription completed (%.2fs)", latency)
             logger.info("Result: \"%s\"", transcribed_text)
-            
+
             return transcribed_text
-            
+
         except Exception as e:
             raise STTError(f"Whisper transcription failed: {str(e)}") from e
 

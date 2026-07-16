@@ -14,13 +14,13 @@ class WakeWordDetector(ABC):
     def detect(self, chunk: np.ndarray) -> bool:
         """
         Processes a single buffer chunk of audio to detect the configured wake word.
-        
+
         Args:
             chunk: A numpy array representing 16-bit 16kHz PCM audio samples.
-            
+
         Returns:
             bool: True if the wake word is detected with confidence, False otherwise.
-            
+
         Raises:
             WakeWordError: If inference calculation fails.
         """
@@ -29,7 +29,7 @@ class WakeWordDetector(ABC):
     def get_wake_word_name(self) -> str:
         """
         Gets the target wake word string (e.g., 'hey jarvis').
-        
+
         Returns:
             str: Target wake word name.
         """

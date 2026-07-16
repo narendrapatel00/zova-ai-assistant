@@ -14,10 +14,10 @@ class SpeechSynthesizer(ABC):
     def speak(self, text: str) -> None:
         """
         Synthesizes the text into speech and plays it back to the user immediately.
-        
+
         Args:
             text: The text sentence to read aloud.
-            
+
         Raises:
             TTSError: If synthesis fails or audio hardware cannot play back the file.
         """
@@ -26,14 +26,14 @@ class SpeechSynthesizer(ABC):
     def synthesize(self, text: str, output_path: Path) -> Path:
         """
         Synthesizes the text and saves the output to a specified WAV file path.
-        
+
         Args:
             text: The text sentence to synthesize.
             output_path: Target Path to save the output WAV file.
-            
+
         Returns:
             Path: The path to the created WAV file.
-            
+
         Raises:
             TTSError: If synthesis fails.
         """

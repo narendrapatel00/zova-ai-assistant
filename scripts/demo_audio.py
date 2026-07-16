@@ -59,13 +59,13 @@ def main() -> None:
 
     try:
         recorder.start_recording()
-        
+
         # Read chunks. get_audio_chunk() blocks for blocksize (80ms), regulating the loop.
         while recorder.is_recording():
             recorder.get_audio_chunk()
             # print a subtle dot to show active capture
             print(".", end="", flush=True)
-            
+
         print("\n\n[Step 3/4] Silence detected. Stopping recording...")
         wav_path = recorder.stop_recording()
         print(f"WAV Audio file saved: {wav_path}")

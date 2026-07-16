@@ -13,7 +13,7 @@ class SpeechSynthesisService:
     def __init__(self, synthesizer: SpeechSynthesizer):
         """
         Initializes the service with a SpeechSynthesizer.
-        
+
         Args:
             synthesizer: Resolved SpeechSynthesizer singleton.
         """
@@ -22,7 +22,7 @@ class SpeechSynthesisService:
     def speak(self, text: str) -> None:
         """
         Synthesizes the text and plays it back to the user immediately.
-        
+
         Args:
             text: Sentence to speak.
         """
@@ -31,11 +31,11 @@ class SpeechSynthesisService:
     def synthesize_to_file(self, text: str, output_path: Path) -> Path:
         """
         Synthesizes text and saves the output to a specified WAV file.
-        
+
         Args:
             text: Sentence to synthesize.
             output_path: Path to write the output WAV.
-            
+
         Returns:
             Path: The generated output file path.
         """

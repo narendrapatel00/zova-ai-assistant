@@ -44,7 +44,7 @@ def main() -> None:
     default_text = "Welcome to Zova, your offline-first personal AI assistant. I am ready."
     print(f"\nEnter text to synthesize (Press Enter to use default: '{default_text}'):")
     user_input = input("> ").strip()
-    
+
     speak_text = user_input if user_input else default_text
 
     print(f"\nSynthesizing text: \"{speak_text}\"")

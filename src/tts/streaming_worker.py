@@ -34,7 +34,7 @@ class StreamingTTSWorker:
     ):
         """
         Initializes the streaming TTS worker.
-        
+
         Args:
             synthesizer: Underlying SpeechSynthesizer implementation.
             output_dir: Folder to save temporary chunk WAV files.
@@ -57,7 +57,7 @@ class StreamingTTSWorker:
             if self._running:
                 return
             self._running = True
-            
+
         self._thread = threading.Thread(
             target=self._worker_loop,
             name="TTSStreamingWorker",
@@ -72,24 +72,24 @@ class StreamingTTSWorker:
             if not self._running:
                 return
             self._running = False
-            
+
         # Put sentinel
         self._queue.put(None)
-        
+
         # Stop sounddevice playbacks instantly
         try:
             sd.stop()
         # pylint: disable=broad-exception-caught
         except Exception:
             pass
-            
+
         self._clear_queue()
         logger.info("TTS Streaming Worker stopped.")
 
     def join(self, timeout: float = 1.0) -> None:
         """
         Waits for the background worker thread to terminate.
-        
+
         Args:
             timeout: Maximum seconds to block.
         """
@@ -100,7 +100,7 @@ class StreamingTTSWorker:
     def is_running(self) -> bool:
         """
         Checks if the worker thread is active.
-        
+
         Returns:
             bool: True if running, False otherwise.
         """
@@ -110,7 +110,7 @@ class StreamingTTSWorker:
     def put(self, text: str) -> None:
         """
         Queues a text sentence for synthesis and playback.
-        
+
         Args:
             text: Text sentence to read.
         """
@@ -135,38 +135,38 @@ class StreamingTTSWorker:
                 # Check cancellation token
                 if self.token.is_cancelled():
                     self._clear_queue()
-                
+
                 text = self._queue.get()
                 if text is None:
                     # Shutdown sentinel received
                     self._queue.task_done()
                     break
-                
+
                 if self.token.is_cancelled():
                     self._queue.task_done()
                     continue
-                
+
                 # Generate unique temp file path
                 temp_wav = (
                     self.output_dir / f"stream_{uuid.uuid4().hex}.wav"
                 )
                 self._current_wav = temp_wav
-                
+
                 try:
                     logger.debug("Synthesizing chunk: \"%s\"", text)
                     self.synthesizer.synthesize(text, temp_wav)
-                    
+
                     if self.token.is_cancelled():
                         self._cleanup_current_wav()
                         self._queue.task_done()
                         continue
-                    
+
                     logger.debug("Playing chunk: \"%s\"", text)
                     play_wav(
                         temp_wav,
                         device_index=self.device_index
                     )
-                    
+
                 except (TTSError, AudioError) as err:
                     logger.error("Error during streaming speech segment: %s", err.message)
                 # pylint: disable=broad-exception-caught
@@ -174,9 +174,9 @@ class StreamingTTSWorker:
                     logger.error("Unexpected error in streaming TTS segment: %s", e)
                 finally:
                     self._cleanup_current_wav()
-                
+
                 self._queue.task_done()
-                
+
             except Exception as e:
                 logger.error("Critical error in Streaming TTS worker loop: %s", e)
 

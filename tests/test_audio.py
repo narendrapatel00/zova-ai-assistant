@@ -22,7 +22,7 @@ def mock_config(tmp_path):
     """Fixture to generate a mock Config with test audio settings."""
     config = MagicMock(spec=Config)
     config.project_root = tmp_path
-    
+
     config.audio = MagicMock()
     config.audio.sample_rate = 16000
     config.audio.channels = 1
@@ -30,7 +30,7 @@ def mock_config(tmp_path):
     config.audio.device_index = 0
     config.audio.silence_threshold = 0.03
     config.audio.silence_seconds = 0.2  # Small timeout for fast testing
-    
+
     return config
 
 
@@ -103,7 +103,7 @@ def test_invalid_device_throws_error(mock_sd_devices, mock_config):
     """Verifies initializing recorder on invalid device index raises AudioError."""
     # Set to invalid index 5
     mock_config.audio.device_index = 5
-    
+
     with pytest.raises(AudioError) as exc_info:
         SounddeviceAudioRecorder(mock_config)
     assert "Invalid audio device index: 5" in str(exc_info.value)
@@ -113,7 +113,7 @@ def test_output_only_device_throws_error(mock_sd_devices, mock_config):
     """Verifies initializing recorder on output-only device index raises AudioError."""
     # Set to output speakers index 1
     mock_config.audio.device_index = 1
-    
+
     with pytest.raises(AudioError) as exc_info:
         SounddeviceAudioRecorder(mock_config)
     assert "has no input channels" in str(exc_info.value)
@@ -124,11 +124,11 @@ def test_recording_and_chunk_queue(mock_sd_devices, mock_config, patch_input_str
     recorder = SounddeviceAudioRecorder(mock_config)
     assert len(patch_input_stream) == 1
     stream = patch_input_stream[0]
-    
+
     # 1. Verify get_audio_chunk blocks and reads from callback data
     dummy_data = np.ones((recorder.chunk_size, 1), dtype=np.float32) * 0.1
     stream.callback(dummy_data, recorder.chunk_size, None, sd.CallbackFlags())
-    
+
     chunk = recorder.get_audio_chunk()
     assert len(chunk) == recorder.chunk_size
     assert np.allclose(chunk, 0.1)
@@ -136,16 +136,16 @@ def test_recording_and_chunk_queue(mock_sd_devices, mock_config, patch_input_str
     # 2. Test recording lifecycle
     recorder.start_recording()
     assert recorder.is_recording()
-    
+
     # Feed two chunks
     stream.callback(dummy_data, recorder.chunk_size, None, sd.CallbackFlags())
     stream.callback(dummy_data, recorder.chunk_size, None, sd.CallbackFlags())
-    
+
     # Stop recording and check file
     wav_path = recorder.stop_recording()
     assert not recorder.is_recording()
     assert wav_path.exists()
-    
+
     # Check WAV properties
     with wave.open(str(wav_path), "rb") as w:
         assert w.getnchannels() == recorder.channels
@@ -153,7 +153,7 @@ def test_recording_and_chunk_queue(mock_sd_devices, mock_config, patch_input_str
         assert w.getframerate() == recorder.sample_rate
         # Frame count should be equal to the length of combined chunks (2 * chunk_size)
         assert w.getnframes() == recorder.chunk_size * 2
-        
+
     recorder.close()
 
 
@@ -161,15 +161,15 @@ def test_vad_silence_auto_stop(mock_sd_devices, mock_config, patch_input_stream)
     """Checks that the RMS VAD detects speech, then silences, and auto-stops recording."""
     recorder = SounddeviceAudioRecorder(mock_config)
     stream = patch_input_stream[0]
-    
+
     recorder.start_recording()
     assert recorder.is_recording()
-    
+
     # 1. Feed low energy (silence) but speech has not started yet
     silent_data = np.zeros((recorder.chunk_size, 1), dtype=np.float32)
     for _ in range(5):
         stream.callback(silent_data, recorder.chunk_size, None, sd.CallbackFlags())
-    
+
     # Should still be recording because speech hasn't started
     assert recorder.is_recording()
     assert not recorder._has_speech_started
@@ -181,42 +181,42 @@ def test_vad_silence_auto_stop(mock_sd_devices, mock_config, patch_input_stream)
     assert recorder._silence_duration == 0.0
 
     # 3. Feed low energy (silence begins)
-    # The config timeout is 0.2s. 
+    # The config timeout is 0.2s.
     # At 16000Hz, each chunk of 1280 frames represents 1280 / 16000 = 0.08s.
     # 3 chunks represent 0.24s which exceeds the 0.2s silence timeout threshold.
     stream.callback(silent_data, recorder.chunk_size, None, sd.CallbackFlags())
     assert recorder.is_recording()  # 0.08s, still recording
-    
+
     stream.callback(silent_data, recorder.chunk_size, None, sd.CallbackFlags())
     assert recorder.is_recording()  # 0.16s, still recording
-    
+
     stream.callback(silent_data, recorder.chunk_size, None, sd.CallbackFlags())
-    
+
     # 0.24s silence - VAD should auto-stop the recording state
     assert not recorder.is_recording()
-    
+
     # The WAV file can be successfully stopped and saved
     wav_path = recorder.stop_recording()
     assert wav_path.exists()
-    
+
     recorder.close()
 
 
 def test_playback_success(tmp_path):
     """Checks play_wav reads file and triggers sounddevice playback."""
     dummy_wav = tmp_path / "test.wav"
-    
+
     # Write a tiny valid mono 16-bit 16kHz WAV file (1600 frames = 0.1s)
     samplerate = 16000
     data = np.zeros(1600, dtype=np.int16)
-    
+
     import scipy.io.wavfile as wavfile  # type: ignore[import-untyped]
     wavfile.write(str(dummy_wav), samplerate, data)
-    
+
     with patch("sounddevice.play") as mock_play:
         with patch("sounddevice.wait") as mock_wait:
             play_wav(dummy_wav, device_index=1)
-            
+
             mock_play.assert_called_once()
             args, kwargs = mock_play.call_args
             # Verify correct data shape passed

@@ -104,17 +104,17 @@ class Config:
     def __init__(self, config_path: Optional[str] = None):
         """
         Initializes the configuration manager.
-        
+
         Args:
             config_path: Path to config.yaml (optional).
         """
         self.project_root = Path(__file__).resolve().parent.parent.parent
-        
+
         if not config_path:
             config_path = os.getenv("ZOVA_CONFIG_PATH", "config/config.yaml")
-        
+
         self.config_filepath = self.project_root / config_path
-        
+
         # Declare instance attributes for type-safety
         self.app: AppConfig
         self.logging: LoggingConfig
@@ -125,25 +125,25 @@ class Config:
         self.setup: SetupConfig
         self.assistant: AssistantConfig
         self.llm: LLMConfig
-        
+
         self.load()
 
     def load(self) -> None:
         """
         Loads the yaml file and parses sections into type-safe dataclasses.
-        
+
         Raises:
             ConfigurationError: if config file is missing or invalid.
         """
         if not self.config_filepath.exists():
             raise ConfigurationError(f"Configuration file not found at {self.config_filepath}")
-        
+
         try:
             with open(self.config_filepath, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
         except Exception as e:
             raise ConfigurationError(f"Failed to parse config YAML: {str(e)}") from e
-        
+
         # 1. Parse App Config
         app_data = data.get("app", {})
         env_override = os.getenv("ZOVA_ENV", app_data.get("env", "development"))
@@ -152,7 +152,7 @@ class Config:
             version=app_data.get("version", "0.1.0"),
             env=env_override
         )
-        
+
         # 2. Parse Logging Config
         log_data = data.get("logging", {})
         log_level = os.getenv("ZOVA_LOG_LEVEL", log_data.get("level", "INFO"))
@@ -163,7 +163,7 @@ class Config:
             max_bytes=log_data.get("max_bytes", 10485760),
             backup_count=log_data.get("backup_count", 5)
         )
-        
+
         # 3. Parse Audio Config
         audio_data = data.get("audio", {})
         self.audio = AudioConfig(
@@ -174,7 +174,7 @@ class Config:
             silence_threshold=audio_data.get("silence_threshold", 0.03),
             silence_seconds=audio_data.get("silence_seconds", 1.5)
         )
-        
+
         # 4. Parse Wake Word Config
         ww_data = data.get("wakeword", {})
         self.wakeword = WakeWordConfig(
@@ -184,7 +184,7 @@ class Config:
             enabled=ww_data.get("enabled", True),
             inference_interval_ms=ww_data.get("inference_interval_ms", 80)
         )
-        
+
         # 5. Parse STT Config
         stt_data = data.get("stt", {})
         self.stt = STTConfig(
@@ -198,7 +198,7 @@ class Config:
             beam_size=stt_data.get("beam_size", 5),
             temperature=stt_data.get("temperature", 0.0)
         )
-        
+
         # 6. Parse TTS Config
         tts_data = data.get("tts", {})
         self.tts = TTSConfig(
@@ -217,7 +217,7 @@ class Config:
             )),
             min_chunk_chars=int(tts_data.get("min_chunk_chars", 20))
         )
-        
+
         # 7. Parse Setup Config
         setup_data = data.get("setup", {})
         self.setup = SetupConfig(
@@ -226,7 +226,7 @@ class Config:
             piper_voice_config_url=setup_data.get("piper_voice_config_url", ""),
             whisper_model_url=setup_data.get("whisper_model_url", "")
         )
-        
+
         # 8. Parse Assistant Config
         ast_data = data.get("assistant", {})
         self.assistant = AssistantConfig(
@@ -236,7 +236,7 @@ class Config:
                 "system_prompt", "prompts/system.txt"
             ))
         )
-        
+
         # 9. Parse LLM Config
         llm_data = data.get("llm", {})
         self.llm = LLMConfig(
@@ -252,10 +252,10 @@ class Config:
         """
         Helper method to resolve paths. If the path is relative, it is resolved
         relative to the project root.
-        
+
         Args:
             relative_or_absolute_path: The path string to resolve.
-            
+
         Returns:
             Resolved absolute Path object.
         """

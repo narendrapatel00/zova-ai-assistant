@@ -29,12 +29,12 @@ class DIContainer:
     def register(self, interface: Type[Any], implementation: Any, singleton: bool = True) -> None:
         """
         Registers an implementation for a given interface type.
-        
+
         Args:
             interface: The abstract base class or interface type.
             implementation: Either an instance of the class, or a callable factory function.
             singleton: If True, registrations of callables are evaluated once and cached.
-            
+
         Raises:
             DependencyInjectionError: If arguments are invalid.
         """
@@ -61,13 +61,13 @@ class DIContainer:
     def resolve(self, interface: Type[Any]) -> Any:
         """
         Resolves and returns the implementation registered for the given interface.
-        
+
         Args:
             interface: The interface type to resolve.
-            
+
         Returns:
             The resolved instance.
-            
+
         Raises:
             DependencyInjectionError: If the dependency is not registered or fails to resolve.
         """

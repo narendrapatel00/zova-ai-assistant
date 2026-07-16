@@ -16,7 +16,7 @@ class AudioListener(ABC):
     def on_audio_chunk(self, chunk: np.ndarray) -> None:
         """
         Callback triggered when a new raw audio chunk is captured.
-        
+
         Args:
             chunk: 1D numpy array representing 16kHz mono audio samples.
         """
@@ -29,7 +29,7 @@ class AudioRecorder(ABC):
     def start_recording(self) -> None:
         """
         Starts recording audio. Must initialize hardware buffers if not already open.
-        
+
         Raises:
             AudioError: If recorder is already recording or hardware fails.
         """
@@ -38,10 +38,10 @@ class AudioRecorder(ABC):
     def stop_recording(self) -> Path:
         """
         Stops the recording session and flushes buffer contents to a WAV file.
-        
+
         Returns:
             Path: The file path pointing to the saved WAV recording.
-            
+
         Raises:
             AudioError: If not currently recording or file creation fails.
         """
@@ -50,10 +50,10 @@ class AudioRecorder(ABC):
     def get_audio_chunk(self) -> np.ndarray:
         """
         Fetches the latest block of audio data from the microphone.
-        
+
         Returns:
             np.ndarray: Audio data as 1D array of 16-bit 16kHz PCM samples.
-            
+
         Raises:
             AudioError: If microphone stream fails or device is disconnected.
         """
@@ -62,7 +62,7 @@ class AudioRecorder(ABC):
     def is_recording(self) -> bool:
         """
         Checks if the recorder is currently capturing a voice command.
-        
+
         Returns:
             bool: True if recording, False otherwise.
         """
@@ -71,7 +71,7 @@ class AudioRecorder(ABC):
     def subscribe(self, listener: AudioListener) -> None:
         """
         Subscribes an AudioListener to receive real-time audio frames.
-        
+
         Args:
             listener: Concrete listener subclass instance.
         """
@@ -80,7 +80,7 @@ class AudioRecorder(ABC):
     def unsubscribe(self, listener: AudioListener) -> None:
         """
         Unsubscribes a previously registered AudioListener.
-        
+
         Args:
             listener: Concrete listener subclass instance.
         """

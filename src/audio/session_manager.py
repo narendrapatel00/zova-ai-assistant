@@ -33,7 +33,7 @@ class AudioSessionManager:
     def get_state(self) -> SessionState:
         """
         Retrieves the current operational state.
-        
+
         Returns:
             SessionState: The active enum state.
         """
@@ -43,7 +43,7 @@ class AudioSessionManager:
     def transition_to(self, new_state: SessionState) -> None:
         """
         Attempts a state transition, locking and logging changes.
-        
+
         Args:
             new_state: Destination SessionState enum.
         """
@@ -51,7 +51,7 @@ class AudioSessionManager:
             old_state = self._state
             if old_state == new_state:
                 return
-            
+
             # Record transition log
             logger.info("Session state transition: %s -> %s", old_state.name, new_state.name)
             self._state = new_state

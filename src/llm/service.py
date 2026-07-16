@@ -13,7 +13,7 @@ class LLMService:
     def __init__(self, client: LLMClient):
         """
         Initializes the service with an LLMClient.
-        
+
         Args:
             client: Resolved LLMClient singleton.
         """
@@ -27,12 +27,12 @@ class LLMService:
     ) -> str:
         """
         Generates a text completion response.
-        
+
         Args:
             prompt: User message prompt.
             system_prompt: Optional system prompt context.
             history: Optional sliding window chat history list.
-            
+
         Returns:
             str: Assistant text response.
         """
@@ -46,12 +46,12 @@ class LLMService:
     ) -> Generator[str, None, None]:
         """
         Streams chat response tokens.
-        
+
         Args:
             prompt: User message prompt.
             system_prompt: Optional system prompt context.
             history: Optional sliding chat history.
-            
+
         Yields:
             str: Streamed tokens.
         """

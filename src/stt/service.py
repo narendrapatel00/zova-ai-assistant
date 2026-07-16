@@ -13,7 +13,7 @@ class SpeechRecognitionService:
     def __init__(self, recognizer: SpeechRecognizer):
         """
         Initializes the service with a SpeechRecognizer.
-        
+
         Args:
             recognizer: Resolved SpeechRecognizer singleton.
         """
@@ -22,10 +22,10 @@ class SpeechRecognitionService:
     def transcribe_audio(self, audio_path: Path) -> str:
         """
         Transcribes the speech recorded in the specified audio WAV file to text.
-        
+
         Args:
             audio_path: Absolute Path to the WAV file.
-            
+
         Returns:
             str: Transcribed text output.
         """

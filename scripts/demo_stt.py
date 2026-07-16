@@ -51,7 +51,7 @@ def main() -> None:
     try:
         # Start recording session
         recorder.start_recording()
-        
+
         while recorder.is_recording():
             recorder.get_audio_chunk()
             print(".", end="", flush=True)
@@ -64,11 +64,11 @@ def main() -> None:
         print("\nLoading audio into Whisper.cpp and transcribing...")
         # Add brief delay to avoid concurrent file locking conflicts
         time.sleep(0.5)
-        
+
         start_time = time.time()
         text = recognizer.transcribe(wav_path)
         latency = time.time() - start_time
-        
+
         print("\n-------------------------------------------------------")
         print(f"Transcription complete (Time taken: {latency:.2f}s)")
         print(f"Result: \"{text}\"")

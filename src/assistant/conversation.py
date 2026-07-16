@@ -12,7 +12,7 @@ class ConversationManager:
     def __init__(self, max_messages: int = 10):
         """
         Initializes the conversation manager.
-        
+
         Args:
             max_messages: Maximum user/assistant dialogue turns to preserve.
         """
@@ -22,11 +22,11 @@ class ConversationManager:
     def add_message(self, role: str, content: str) -> None:
         """
         Adds a message to the dialogue history.
-        
+
         Args:
             role: Must be 'user', 'assistant', or 'system'.
             content: The text content of the message.
-            
+
         Raises:
             ValueError: If an unsupported role is provided.
         """
@@ -34,7 +34,7 @@ class ConversationManager:
             raise ValueError(f"Unsupported conversation role: {role}")
 
         self._history.append({"role": role, "content": content})
-        
+
         # Enforce sliding window capacity limit
         if len(self._history) > self.max_messages:
             self._history = self._history[-self.max_messages:]
@@ -42,7 +42,7 @@ class ConversationManager:
     def get_history(self) -> List[Dict[str, str]]:
         """
         Retrieves a copy of the sliding window chat history.
-        
+
         Returns:
             List[Dict[str, str]]: Copied list of message dictionaries.
         """

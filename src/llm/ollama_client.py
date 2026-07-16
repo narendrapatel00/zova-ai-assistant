@@ -28,15 +28,15 @@ class LLMClient(ABC):
     ) -> str:
         """
         Generates a text completion response.
-        
+
         Args:
             prompt: User message prompt.
             system_prompt: Optional system prompt context instructions.
             history: Optional sliding window chat history list.
-            
+
         Returns:
             str: Assistant text response.
-            
+
         Raises:
             LLMError: If server connection fails or response is invalid.
         """
@@ -50,15 +50,15 @@ class LLMClient(ABC):
     ) -> Generator[str, None, None]:
         """
         Generates a streaming text completion response.
-        
+
         Args:
             prompt: User message prompt.
             system_prompt: Optional system prompt context instructions.
             history: Optional sliding window chat history list.
-            
+
         Yields:
             str: Streaming response tokens.
-            
+
         Raises:
             LLMError: If server connection fails during stream generation.
         """
@@ -74,7 +74,7 @@ class OllamaLLMClient(LLMClient):
     def __init__(self, config: Config):
         """
         Initializes the Ollama HTTP client.
-        
+
         Args:
             config: Loaded application configuration manager.
         """
@@ -133,13 +133,13 @@ class OllamaLLMClient(LLMClient):
         try:
             logger.info("Sending request to Ollama (model: %s)", self.model)
             response = self._session.post(url, json=payload, timeout=self.timeout)
-            
+
             if response.status_code != 200:
                 raise LLMError(
                     f"Ollama server returned error status {response.status_code}: "
                     f"{response.text}"
                 )
-                
+
             data = response.json()
             assistant_message = data.get("message", {}).get("content", "").strip()
             logger.info("Ollama response received successfully.")
@@ -173,7 +173,7 @@ class OllamaLLMClient(LLMClient):
         try:
             logger.info("Sending streaming request to Ollama (model: %s)", self.model)
             response = self._session.post(url, json=payload, timeout=self.timeout, stream=True)
-            
+
             if response.status_code != 200:
                 raise LLMError(
                     f"Ollama server returned error status {response.status_code}: "

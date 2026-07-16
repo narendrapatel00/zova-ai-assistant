@@ -35,7 +35,7 @@ class ConsoleAssistantObserver:
     def __init__(self, event_bus: EventBus):
         """
         Initializes the observer.
-        
+
         Args:
             event_bus: Decoupled event bus.
         """
@@ -53,10 +53,10 @@ class ConsoleAssistantObserver:
         self.event_bus.subscribe(TTSCompleted, self.on_tts_completed)
         self.event_bus.subscribe(ErrorOccurred, self.on_error)
 
-    def on_wake_word_detected(self, event: WakeWordDetected) -> None:
+    def on_wake_word_detected(self, _event: WakeWordDetected) -> None:
         print("\n>>> [Wake Word Detected] Jarvis matched! <<<")
 
-    def on_recording_started(self, event: RecordingStarted) -> None:
+    def on_recording_started(self, _event: RecordingStarted) -> None:
         print("[Record] Microphone active. Speak your voice command now...")
 
     def on_recording_finished(self, event: RecordingFinished) -> None:
@@ -65,16 +65,16 @@ class ConsoleAssistantObserver:
     def on_stt_completed(self, event: STTCompleted) -> None:
         print(f"[STT] Transcribed text: \"{event.text}\"")
 
-    def on_llm_start(self, event: LLMStarted) -> None:
+    def on_llm_start(self, _event: LLMStarted) -> None:
         print("[LLM] Dispatched query to local Ollama server...")
 
     def on_llm_completed(self, event: LLMCompleted) -> None:
         print(f"[LLM] Brain response: \"{event.response}\"")
 
-    def on_tts_start(self, event: TTSStarted) -> None:
+    def on_tts_start(self, _event: TTSStarted) -> None:
         print("[TTS] Running offline speech synthesis...")
 
-    def on_tts_completed(self, event: TTSCompleted) -> None:
+    def on_tts_completed(self, _event: TTSCompleted) -> None:
         print("[TTS] Vocalization playback complete.")
         print("\n-------------------------------------------------------")
         print(" [Idle] Ready. Listening for wake word: 'Jarvis'...")
@@ -122,7 +122,7 @@ def main() -> None:
     try:
         # Start the background pipeline
         orchestrator.start()
-        
+
         # Keep the main thread alive while background workers capture audio
         while orchestrator.is_running():
             time.sleep(0.5)

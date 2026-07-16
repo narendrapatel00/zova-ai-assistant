@@ -29,7 +29,7 @@ class SounddeviceAudioRecorder(AudioRecorder):
     def __init__(self, config: Config):
         """
         Initializes the audio recorder.
-        
+
         Args:
             config: Loaded application configuration manager.
         """
@@ -57,10 +57,10 @@ class SounddeviceAudioRecorder(AudioRecorder):
     def list_devices() -> List[Dict[str, Any]]:
         """
         Lists all available audio input devices (microphones).
-        
+
         Returns:
             List[Dict[str, Any]]: List of device dictionaries containing index and info.
-            
+
         Raises:
             AudioError: If device enumeration fails.
         """
@@ -83,7 +83,7 @@ class SounddeviceAudioRecorder(AudioRecorder):
         """Initializes and starts the background sounddevice InputStream."""
         try:
             devices = sd.query_devices()
-            
+
             # Select target device index
             target_device = self.device_index
             if target_device is None:
@@ -164,7 +164,7 @@ class SounddeviceAudioRecorder(AudioRecorder):
                                 self._silence_duration
                             )
                             self._is_recording = False
-            
+
             # Copy active listener references
             listeners_copy = self._listeners.copy()
 
@@ -181,7 +181,7 @@ class SounddeviceAudioRecorder(AudioRecorder):
         with self._lock:
             if self._is_recording:
                 raise AudioError("AudioRecorder is already recording.")
-            
+
             # Verify stream is healthy
             if not self._stream or not self._stream.active:
                 raise AudioError("Cannot record: Audio InputStream is inactive.")
@@ -266,7 +266,7 @@ class SounddeviceAudioRecorder(AudioRecorder):
         with self._lock:
             self._is_recording = False
             self._listeners.clear()
-        
+
         logger.info("Releasing audio streams...")
         if self._stream:
             try:
