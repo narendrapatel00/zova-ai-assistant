@@ -1,30 +1,46 @@
 """
-Central Assistant Orchestrator for ZovaAI.
-Coordinates state transitions and data flows between components:
-AudioRecorder -> WakeWord -> STT -> Conversation -> LLM -> TTS.
+Assistant Orchestrator for ZovaAI.
+Refactored to support strongly typed Event Bus publishing, shared CancellationToken,
+Enum-based state machine transitions, and low-latency chunk-by-sentence TTS vocalizations.
 """
 
 # pylint: disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
 # pylint: disable=broad-exception-caught
 
 import time
-from typing import List
+from typing import List, Optional
+
 from src.core.config import Config
 from src.core.logger import get_logger
 from src.core.exceptions import AudioError, WakeWordError, STTError, TTSError, LLMError
+from src.core.cancellation import CancellationToken
 from src.interfaces.audio_recorder import AudioRecorder
 from src.interfaces.speech_recognizer import SpeechRecognizer
 from src.wakeword.interfaces import WakeWordService
 from src.llm.service import LLMService
 from src.tts.service import SpeechSynthesisService
+from src.tts.streaming_worker import StreamingTTSWorker
+from src.audio.session_manager import AudioSessionManager, SessionState
 from src.assistant.conversation import ConversationManager
-from src.assistant.events import AssistantEventObserver
+from src.events.event_bus import EventBus
+from src.events.events import (
+    WakeWordDetected,
+    RecordingStarted,
+    RecordingFinished,
+    STTCompleted,
+    LLMStarted,
+    LLMChunkReceived,
+    LLMCompleted,
+    TTSStarted,
+    TTSCompleted,
+    ErrorOccurred
+)
 
 logger = get_logger("assistant_orchestrator")
 
 
 class AssistantOrchestrator:
-    """Core orchestrator that binds speech, wakeword, LLM, and synthesis engines together."""
+    """Central manager driving the low-latency offline voice pipeline loops."""
 
     def __init__(
         self,
@@ -33,18 +49,22 @@ class AssistantOrchestrator:
         wakeword_service: WakeWordService,
         speech_recognizer: SpeechRecognizer,
         llm_service: LLMService,
-        speech_synthesizer: SpeechSynthesisService
+        speech_synthesizer: SpeechSynthesisService,
+        event_bus: EventBus,
+        session_manager: AudioSessionManager
     ):
         """
         Initializes the assistant orchestrator.
         
         Args:
-            config: Central configuration manager.
-            audio_recorder: Resolved AudioRecorder singleton.
-            wakeword_service: Resolved WakeWordListeningService singleton.
-            speech_recognizer: Resolved SpeechRecognizer singleton.
-            llm_service: Resolved LLMService singleton.
-            speech_synthesizer: Resolved SpeechSynthesisService singleton.
+            config: Loaded application config manager.
+            audio_recorder: AudioRecorder stream service.
+            wakeword_service: WakeWord detector background service.
+            speech_recognizer: STT transcriber service.
+            llm_service: LLM inference service.
+            speech_synthesizer: TTS synthesis service.
+            event_bus: Decoupled pub/sub event bus.
+            session_manager: Audio session state coordinator.
         """
         self.config = config
         self.audio_recorder = audio_recorder
@@ -52,41 +72,21 @@ class AssistantOrchestrator:
         self.speech_recognizer = speech_recognizer
         self.llm_service = llm_service
         self.speech_synthesizer = speech_synthesizer
+        self.event_bus = event_bus
+        self.session_manager = session_manager
 
         self.name = config.assistant.name
         self.wake_response = config.assistant.wake_response
         self.system_prompt_path = config.assistant.system_prompt
 
         self.conversation_manager = ConversationManager(max_messages=10)
-        self._observers: List[AssistantEventObserver] = []
+        self.current_token: Optional[CancellationToken] = None
+        self.tts_worker: Optional[StreamingTTSWorker] = None
         self._running = False
         self._system_prompt = ""
 
-    def register_observer(self, observer: AssistantEventObserver) -> None:
-        """Registers a lifecycle observer to listen to pipeline transitions."""
-        if observer not in self._observers:
-            self._observers.append(observer)
-
-    def remove_observer(self, observer: AssistantEventObserver) -> None:
-        """Removes a registered lifecycle observer."""
-        if observer in self._observers:
-            self._observers.remove(observer)
-
-    def _notify(self, event_name: str, *args, **kwargs) -> None:
-        """Helper to fire observer hooks safely without raising execution blocks."""
-        for obs in self._observers:
-            try:
-                callback = getattr(obs, event_name, None)
-                if callback:
-                    callback(*args, **kwargs)
-            except Exception as e:
-                logger.error(
-                    "Error in observer %s callback %s: %s",
-                    type(obs).__name__, event_name, e
-                )
-
     def _load_system_prompt(self) -> str:
-        """Loads system prompt instructions from system_prompt_path. Creates default if missing."""
+        """Loads system prompt from disk, generating a default if missing."""
         try:
             resolved_path = self.config.resolve_path(str(self.system_prompt_path))
             if not resolved_path.exists():
@@ -103,11 +103,11 @@ class AssistantOrchestrator:
             logger.info("System prompt loaded from %s", resolved_path)
             return prompt
         except Exception as e:
-            logger.warning("Failed to load system prompt: %s. Using basic default.", e)
+            logger.warning("Failed to load system prompt: %s. Using default.", e)
             return f"You are {self.name}, a helpful personal assistant."
 
     def start(self) -> None:
-        """Starts the assistant orchestration lifecycle loop."""
+        """Starts the event bus dispatcher and hooks wake word loops."""
         if self._running:
             logger.warning("AssistantOrchestrator is already running.")
             return
@@ -115,106 +115,188 @@ class AssistantOrchestrator:
         self._running = True
         self._system_prompt = self._load_system_prompt()
         
-        # Register the processing callback to wake-word triggers
+        # Start event bus thread first
+        self.event_bus.start()
+        
+        # Transition state to listening
+        self.session_manager.transition_to(SessionState.LISTENING)
+        
+        # Register wake word callback and start background thread
         self.wakeword_service.register_callback(self._on_wake_word_trigger)
         self.wakeword_service.start()
         
-        logger.info("Assistant Orchestrator active.")
-        self._notify("on_waiting_for_wake_word")
+        logger.info("Assistant Orchestrator active and listening.")
 
     def stop(self) -> None:
-        """Stops the orchestrator and background services."""
+        """Gracefully stops all dispatcher threads, workers, and queues."""
         if not self._running:
             return
         
         self._running = False
+        self.session_manager.transition_to(SessionState.SHUTTING_DOWN)
+        
+        # Cancel any active execution cycles
+        if self.current_token:
+            self.current_token.cancel()
+            
+        # Stop background threads
         self.wakeword_service.stop()
+        if self.tts_worker:
+            self.tts_worker.stop()
+            self.tts_worker.join(timeout=1.0)
+            
+        self.event_bus.stop()
+        self.event_bus.join(timeout=1.0)
         logger.info("Assistant Orchestrator stopped.")
 
     def is_running(self) -> bool:
-        """Checks if orchestrator loop is active."""
+        """Checks if the assistant orchestrator is active."""
         return self._running
 
     def _on_wake_word_trigger(self) -> None:
-        """Internal callback executed on background wake word thread detections."""
+        """Callback triggered when the wake word is detected."""
         if not self._running:
             return
 
-        logger.info("Wake word matched! Processing command loop...")
-        self._notify("on_wake_word_detected")
+        # Handle cancellation if wake word matched during active vocalization
+        active_state = self.session_manager.get_state()
+        if active_state == SessionState.SPEAKING or active_state == SessionState.PROCESSING:
+            logger.info("User interrupted speaking assistant. Cancelling current cycle.")
+            if self.current_token:
+                self.current_token.cancel()
+            if self.tts_worker:
+                self.tts_worker.stop()
+            
+            # Short sleep to clear buffers and sockets
+            time.sleep(0.2)
+            
+        # Transition to recording state
+        self.session_manager.transition_to(SessionState.RECORDING)
+        self.event_bus.publish(WakeWordDetected())
 
+        # Spawn new clean cancellation token and TTS worker for this run
+        self.current_token = CancellationToken()
+        self.tts_worker = StreamingTTSWorker(
+            self.speech_synthesizer.synthesizer,
+            self.config.tts.output_dir,
+            self.config.audio.device_index,
+            self.current_token
+        )
+        self.tts_worker.start()
+
+        # Run pipeline in a safe execution block
         try:
-            # 1. Capture User Voice Command
-            self._notify("on_recording_started")
-            logger.info("Recording command...")
-            
-            self.audio_recorder.start_recording()
-            
-            # Read chunks. blocks until VAD silence detection triggers stop
-            while self.audio_recorder.is_recording():
-                self.audio_recorder.get_audio_chunk()
-
-            wav_path = self.audio_recorder.stop_recording()
-            logger.info("Recording finished: %s", wav_path.name)
-            self._notify("on_recording_finished", wav_path)
-
-            # 2. Transcribe voice file to text
-            logger.info("Transcribing audio...")
-            # Brief delay to ensure file lock is released
-            time.sleep(0.1)
-            transcribed_text = self.speech_recognizer.transcribe(wav_path)
-            
-            if not transcribed_text.strip():
-                logger.info("Empty transcription. Skipping LLM generation.")
-                self._notify("on_waiting_for_wake_word")
-                return
-
-            self._notify("on_transcription_finished", transcribed_text)
-
-            # 3. Generate response using Ollama
-            logger.info("Sending request to LLM...")
-            self._notify("on_llm_start", transcribed_text)
-            
-            history = self.conversation_manager.get_history()
-            response_text = self.llm_service.generate_response(
-                transcribed_text,
-                self._system_prompt,
-                history
-            )
-            
-            logger.info("LLM Response: \"%s\"", response_text)
-            self._notify("on_llm_response", response_text)
-            
-            # Update dialogue history memory
-            self.conversation_manager.add_message("user", transcribed_text)
-            self.conversation_manager.add_message("assistant", response_text)
-
-            # 4. Synthesize voice response
-            logger.info("Speaking response...")
-            self._notify("on_tts_start", response_text)
-            
-            self.speech_synthesizer.speak(response_text)
-            
-            self._notify("on_tts_finished")
-
-        except (AudioError, WakeWordError, STTError, TTSError, LLMError) as err:
-            logger.error("Assistant Pipeline Error: %s", err.message)
-            self._notify("on_error", err.message)
-            
-            # If Ollama server is offline, vocalize error directly to speakers as feedback
-            if isinstance(err, LLMError):
-                try:
-                    self.speech_synthesizer.speak(
-                        "Sorry, I cannot connect to the local brain server. "
-                        "Please verify that Ollama is running."
-                    )
-                except Exception:
-                    pass
+            self._execute_pipeline(self.current_token, self.tts_worker)
         except Exception as e:
-            logger.error("Unhandled pipeline exception: %s", e)
-            self._notify("on_error", str(e))
-        finally:
-            # Re-enter waiting for wake word state
+            logger.error("Error running orchestrator pipeline: %s", e)
+            self.event_bus.publish(ErrorOccurred(error_message=str(e)))
+            
+            # Transition state back to listening
             if self._running:
-                logger.info("Ready. Waiting for wake word...")
-                self._notify("on_waiting_for_wake_word")
+                self.session_manager.transition_to(SessionState.LISTENING)
+
+    def _execute_pipeline(self, token: CancellationToken, tts_worker: StreamingTTSWorker) -> None:
+        """Runs the sequence steps checking the cancellation token between blocks."""
+        # 1. Record voice command
+        self.event_bus.publish(RecordingStarted())
+        
+        self.audio_recorder.start_recording()
+        while self.audio_recorder.is_recording():
+            if token.is_cancelled():
+                break
+            self.audio_recorder.get_audio_chunk()
+            
+        wav_path = self.audio_recorder.stop_recording()
+        
+        if token.is_cancelled():
+            logger.info("Command cycle cancelled during voice recording.")
+            return
+
+        self.event_bus.publish(RecordingFinished(wav_path=wav_path))
+
+        # 2. Transcribe WAV file to text
+        self.session_manager.transition_to(SessionState.PROCESSING)
+        time.sleep(0.1)  # Release file locks
+        transcribed_text = self.speech_recognizer.transcribe(wav_path)
+        
+        if token.is_cancelled():
+            logger.info("Command cycle cancelled during STT transcription.")
+            return
+
+        if not transcribed_text.strip():
+            logger.info("Empty command transcription. Resetting state.")
+            self.session_manager.transition_to(SessionState.LISTENING)
+            self.event_bus.publish(TTSCompleted())  # Signal end
+            return
+
+        self.event_bus.publish(STTCompleted(text=transcribed_text))
+
+        # 3. Stream Ollama Response and accumulate sentences
+        self.event_bus.publish(LLMStarted(prompt=transcribed_text))
+        
+        history = self.conversation_manager.get_history()
+        stream = self.llm_service.generate_response_stream(
+            transcribed_text,
+            self._system_prompt,
+            history
+        )
+        
+        buffer = ""
+        full_response = ""
+        min_chars = self.config.tts.min_chunk_chars
+        sentence_delimiters = (".", "?", "!", "\n")
+
+        for chunk in stream:
+            if token.is_cancelled():
+                break
+            
+            self.event_bus.publish(LLMChunkReceived(chunk=chunk))
+            buffer += chunk
+            full_response += chunk
+            
+            # Extract sentence boundaries
+            min_idx = -1
+            for delim in sentence_delimiters:
+                idx = buffer.find(delim)
+                if idx != -1:
+                    if min_idx == -1 or idx < min_idx:
+                        min_idx = idx
+            
+            if min_idx != -1:
+                sentence = buffer[:min_idx + 1]
+                if len(sentence.strip()) >= min_chars:
+                    self.session_manager.transition_to(SessionState.SPEAKING)
+                    tts_worker.put(sentence.strip())
+                    buffer = buffer[min_idx + 1:]
+
+        # Abort if cancelled
+        if token.is_cancelled():
+            logger.info("Command cycle cancelled during LLM stream.")
+            return
+
+        # Dispatch any remaining text buffer
+        if buffer.strip():
+            self.session_manager.transition_to(SessionState.SPEAKING)
+            tts_worker.put(buffer.strip())
+
+        self.event_bus.publish(LLMCompleted(response=full_response))
+        
+        # Save to memory history
+        self.conversation_manager.add_message("user", transcribed_text)
+        self.conversation_manager.add_message("assistant", full_response)
+
+        # 4. Wait for all speech segments to play back
+        self.event_bus.publish(TTSStarted(text=full_response))
+        
+        # Blocks orchestrator thread until TTS Queue is completely drained
+        tts_worker._queue.join()
+        
+        if token.is_cancelled():
+            logger.info("Command cycle cancelled during TTS vocalization.")
+            return
+            
+        self.event_bus.publish(TTSCompleted())
+        
+        # Re-enter waiting for wake word state
+        if self._running:
+            self.session_manager.transition_to(SessionState.LISTENING)

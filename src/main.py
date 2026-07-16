@@ -26,6 +26,10 @@ from src.tts.service import SpeechSynthesisService
 from src.llm.ollama_client import LLMClient, OllamaLLMClient
 from src.llm.service import LLMService
 from src.assistant.orchestrator import AssistantOrchestrator
+from src.events.event_bus import EventBus
+from src.audio.session_manager import AudioSessionManager
+from src.metrics.metrics import MetricsCollector
+from src.assistant.subscribers import LoggingSubscriber, MetricsSubscriber
 
 logger = get_logger("main")
 
@@ -73,22 +77,39 @@ class ZovaApp:
             
             # 3. Register core configuration with DI Container
             self.container.register(Config, self.config, singleton=True)
+
+            # 4. Register Event Bus
+            self.container.register(EventBus, EventBus(), singleton=True)
+
+            # 5. Register Audio Session Manager
+            self.container.register(AudioSessionManager, AudioSessionManager(), singleton=True)
+
+            # 6. Register Metrics Collector
+            self.container.register(MetricsCollector, MetricsCollector(), singleton=True)
+
+            # Resolve event bus and metrics to connect plugins
+            event_bus = self.container.resolve(EventBus)
+            metrics = self.container.resolve(MetricsCollector)
             
-            # 4. Register concrete audio recorder implementation
+            # Wire subscribers
+            LoggingSubscriber(event_bus).register()
+            MetricsSubscriber(event_bus, metrics).register()
+            
+            # 7. Register concrete audio recorder implementation
             self.container.register(
                 AudioRecorder,
                 lambda c: SounddeviceAudioRecorder(c.resolve(Config)),
                 singleton=True
             )
 
-            # 5. Register concrete wake word detector
+            # 8. Register concrete wake word detector
             self.container.register(
                 WakeWordDetector,
                 lambda c: OpenWakeWordDetector(c.resolve(Config)),
                 singleton=True
             )
 
-            # 6. Register concrete wake word listening service
+            # 9. Register concrete wake word listening service
             self.container.register(
                 WakeWordService,
                 lambda c: WakeWordListeningService(
@@ -99,49 +120,49 @@ class ZovaApp:
                 singleton=True
             )
 
-            # 7. Register concrete speech recognizer
+            # 10. Register concrete speech recognizer
             self.container.register(
                 SpeechRecognizer,
                 lambda c: WhisperSpeechRecognizer(c.resolve(Config)),
                 singleton=True
             )
 
-            # 8. Register speech recognition service
+            # 11. Register speech recognition service
             self.container.register(
                 SpeechRecognitionService,
                 lambda c: SpeechRecognitionService(c.resolve(SpeechRecognizer)),
                 singleton=True
             )
 
-            # 9. Register concrete speech synthesizer
+            # 12. Register concrete speech synthesizer
             self.container.register(
                 SpeechSynthesizer,
                 lambda c: PiperSpeechSynthesizer(c.resolve(Config)),
                 singleton=True
             )
 
-            # 10. Register speech synthesis service
+            # 13. Register speech synthesis service
             self.container.register(
                 SpeechSynthesisService,
                 lambda c: SpeechSynthesisService(c.resolve(SpeechSynthesizer)),
                 singleton=True
             )
 
-            # 11. Register LLM Client
+            # 14. Register LLM Client
             self.container.register(
                 LLMClient,
                 lambda c: OllamaLLMClient(c.resolve(Config)),
                 singleton=True
             )
 
-            # 12. Register LLM Service
+            # 15. Register LLM Service
             self.container.register(
                 LLMService,
                 lambda c: LLMService(c.resolve(LLMClient)),
                 singleton=True
             )
 
-            # 13. Register Assistant Orchestrator
+            # 16. Register Assistant Orchestrator
             self.container.register(
                 AssistantOrchestrator,
                 lambda c: AssistantOrchestrator(
@@ -150,7 +171,9 @@ class ZovaApp:
                     c.resolve(WakeWordService),
                     c.resolve(SpeechRecognizer),
                     c.resolve(LLMService),
-                    c.resolve(SpeechSynthesisService)
+                    c.resolve(SpeechSynthesisService),
+                    c.resolve(EventBus),
+                    c.resolve(AudioSessionManager)
                 ),
                 singleton=True
             )

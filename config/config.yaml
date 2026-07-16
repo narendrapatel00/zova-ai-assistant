@@ -45,6 +45,7 @@ tts:
   model_path: "models/piper/en_US-lessac-medium.onnx"
   config_path: "models/piper/en_US-lessac-medium.onnx.json"
   output_dir: "temp/tts"
+  min_chunk_chars: 20
 
 # Setup Download Configuration
 setup:

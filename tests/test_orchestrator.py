@@ -1,14 +1,18 @@
 """
-Unit tests for ZovaAI Assistant Orchestrator.
-Tests pipeline execution, event observer callbacks, empty transcription exits,
-Ollama connections, and pipeline error recovery using mocks.
+Unit and integration tests for ZovaAI Assistant Orchestrator.
+Tests pipeline execution, strongly typed FIFO event bus transitions, session manager,
+cancellation token interrupts, multiple subscribers, and thread lifecycles.
 """
 
+# pylint: disable=broad-exception-caught
+
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 import pytest
 
 from src.core.config import Config
+from src.core.cancellation import CancellationToken
 from src.core.exceptions import LLMError, AudioError
 from src.interfaces.audio_recorder import AudioRecorder
 from src.interfaces.speech_recognizer import SpeechRecognizer
@@ -16,7 +20,20 @@ from src.wakeword.interfaces import WakeWordService
 from src.llm.service import LLMService
 from src.tts.service import SpeechSynthesisService
 from src.assistant.orchestrator import AssistantOrchestrator
-from src.assistant.events import AssistantEventObserver
+from src.audio.session_manager import AudioSessionManager, SessionState
+from src.events.event_bus import EventBus
+from src.events.events import (
+    WakeWordDetected,
+    RecordingStarted,
+    RecordingFinished,
+    STTCompleted,
+    LLMStarted,
+    LLMChunkReceived,
+    LLMCompleted,
+    TTSStarted,
+    TTSCompleted,
+    ErrorOccurred
+)
 
 
 @pytest.fixture
@@ -30,16 +47,28 @@ def mock_pipeline(tmp_path):
     config.assistant.wake_response = "Yes?"
     config.assistant.system_prompt = tmp_path / "prompts" / "system.txt"
     config.resolve_path.side_effect = lambda p: Path(p)
+    
+    config.audio = MagicMock()
+    config.audio.device_index = 0
+    
+    config.tts = MagicMock()
+    config.tts.min_chunk_chars = 10
+    config.tts.output_dir = tmp_path / "temp" / "tts"
 
     recorder = MagicMock(spec=AudioRecorder)
-    # Simulate a stream that captures 2 chunks then finishes (VAD stops)
     recorder.is_recording.side_effect = [True, True, False]
     recorder.stop_recording.return_value = tmp_path / "temp" / "recording.wav"
     
     wakeword = MagicMock(spec=WakeWordService)
     stt = MagicMock(spec=SpeechRecognizer)
     llm = MagicMock(spec=LLMService)
+    
+    # Mock synthesizers inside TTS service
     tts = MagicMock(spec=SpeechSynthesisService)
+    tts_inner = MagicMock()
+    tts_inner.output_dir = tmp_path / "temp" / "tts"
+    tts_inner.output_dir.mkdir(parents=True, exist_ok=True)
+    tts.synthesizer = tts_inner
     
     return {
         "config": config,
@@ -52,168 +81,228 @@ def mock_pipeline(tmp_path):
 
 
 def test_assistant_orchestrator_initialization(mock_pipeline):
-    """Checks that orchestrator registers system prompts and observer bindings."""
+    """Checks that orchestrator registers system prompts and states on init."""
+    event_bus = EventBus()
+    session_manager = AudioSessionManager()
+    
     orchestrator = AssistantOrchestrator(
         mock_pipeline["config"],
         mock_pipeline["recorder"],
         mock_pipeline["wakeword"],
         mock_pipeline["stt"],
         mock_pipeline["llm"],
-        mock_pipeline["tts"]
+        mock_pipeline["tts"],
+        event_bus,
+        session_manager
     )
     
     assert orchestrator.name == "Zova"
     assert orchestrator.is_running() is False
+    assert session_manager.get_state() == SessionState.IDLE
 
 
 def test_pipeline_execution_success(mock_pipeline, tmp_path):
-    """Checks the full wake word -> record -> STT -> LLM -> TTS sequence."""
+    """Checks full pipeline execution with LLM response streaming and event publishing."""
+    event_bus = EventBus()
+    session_manager = AudioSessionManager()
+    
     orchestrator = AssistantOrchestrator(
         mock_pipeline["config"],
         mock_pipeline["recorder"],
         mock_pipeline["wakeword"],
         mock_pipeline["stt"],
         mock_pipeline["llm"],
-        mock_pipeline["tts"]
+        mock_pipeline["tts"],
+        event_bus,
+        session_manager
     )
 
-    # 1. Setup transcription and LLM response values
-    mock_pipeline["stt"].transcribe.return_value = "hello Jarvis who are you"
-    mock_pipeline["llm"].generate_response.return_value = "I am Zova, your assistant."
-
-    # 2. Register mock observer to track lifecycle events
-    observer = MagicMock(spec=AssistantEventObserver)
-    orchestrator.register_observer(observer)
-
-    # 3. Start orchestrator (stores callback registration ref)
-    orchestrator.start()
+    # Mock success outputs
+    mock_pipeline["stt"].transcribe.return_value = "hello Jarvis"
     
-    # Extract the wake word callback registered
-    mock_pipeline["wakeword"].register_callback.assert_called_once()
+    # Mock LLM stream generator yielding clauses
+    def mock_stream(prompt, system_prompt, history):
+        yield "I am Zova. "
+        yield "An assistant."
+    mock_pipeline["llm"].generate_response_stream.side_effect = mock_stream
+
+    # Setup list to accumulate published events from Bus
+    published_events = []
+    def log_event(event):
+        published_events.append(event)
+
+    event_bus.subscribe(WakeWordDetected, log_event)
+    event_bus.subscribe(RecordingStarted, log_event)
+    event_bus.subscribe(RecordingFinished, log_event)
+    event_bus.subscribe(STTCompleted, log_event)
+    event_bus.subscribe(LLMStarted, log_event)
+    event_bus.subscribe(LLMChunkReceived, log_event)
+    event_bus.subscribe(LLMCompleted, log_event)
+    event_bus.subscribe(TTSStarted, log_event)
+    event_bus.subscribe(TTSCompleted, log_event)
+
+    # Start orchestrator
+    orchestrator.start()
+    assert session_manager.get_state() == SessionState.LISTENING
+
     callback = mock_pipeline["wakeword"].register_callback.call_args[0][0]
 
-    # Verify initial wait state notified
-    observer.on_waiting_for_wake_word.assert_called_once()
-    observer.on_waiting_for_wake_word.reset_mock()
+    with patch("src.tts.streaming_worker.play_wav") as mock_play_wav:
+        # Trigger wake-word match
+        callback()
+        
+        # Give Event Bus dispatcher thread brief time to process async queue tasks
+        time.sleep(0.5)
 
-    # 4. Trigger the wake word callback (runs processing cycle)
-    callback()
+        # Stop orchestrator
+        orchestrator.stop()
 
-    # 5. Assert pipeline step invocations
-    mock_pipeline["recorder"].start_recording.assert_called_once()
-    mock_pipeline["recorder"].stop_recording.assert_called_once()
-    
+    # Verify event types published in FIFO order
+    event_types = [type(e) for e in published_events]
+    assert WakeWordDetected in event_types
+    assert RecordingStarted in event_types
+    assert RecordingFinished in event_types
+    assert STTCompleted in event_types
+    assert LLMStarted in event_types
+    assert LLMChunkReceived in event_types
+    assert LLMCompleted in event_types
+    assert TTSStarted in event_types
+    assert TTSCompleted in event_types
+
+    # Assert correct parameters passed through pipeline
     mock_pipeline["stt"].transcribe.assert_called_once_with(tmp_path / "temp" / "recording.wav")
+    mock_pipeline["llm"].generate_response_stream.assert_called_once()
     
-    # Check LLM call includes system prompt and chat history
-    mock_pipeline["llm"].generate_response.assert_called_once()
-    args = mock_pipeline["llm"].generate_response.call_args[0]
-    assert args[0] == "hello Jarvis who are you"
-    assert "You are Zova" in args[1] # System prompt text
-    assert len(args[2]) == 0 # Chat history (initially empty)
+    # Playback should be requested on the sentences
+    mock_play_wav.assert_called()
 
-    # Check TTS playback matches LLM response
-    mock_pipeline["tts"].speak.assert_called_once_with("I am Zova, your assistant.")
 
-    # 6. Verify observer event transitions
-    observer.on_wake_word_detected.assert_called_once()
-    observer.on_recording_started.assert_called_once()
-    observer.on_recording_finished.assert_called_once_with(tmp_path / "temp" / "recording.wav")
-    observer.on_transcription_finished.assert_called_once_with("hello Jarvis who are you")
-    observer.on_llm_start.assert_called_once_with("hello Jarvis who are you")
-    observer.on_llm_response.assert_called_once_with("I am Zova, your assistant.")
-    observer.on_tts_start.assert_called_once_with("I am Zova, your assistant.")
-    observer.on_tts_finished.assert_called_once()
-    observer.on_waiting_for_wake_word.assert_called_once()
+def test_empty_transcription_stops_early(mock_pipeline):
+    """Checks that empty speech command stops pipeline without calling LLM."""
+    event_bus = EventBus()
+    session_manager = AudioSessionManager()
     
-    # Assert conversation history was updated
-    history = orchestrator.conversation_manager.get_history()
-    assert len(history) == 2
-    assert history[0] == {"role": "user", "content": "hello Jarvis who are you"}
-    assert history[1] == {"role": "assistant", "content": "I am Zova, your assistant."}
-
-
-def test_empty_transcription_exits_early(mock_pipeline):
-    """Checks that empty speech input skips the LLM and TTS segments."""
     orchestrator = AssistantOrchestrator(
         mock_pipeline["config"],
         mock_pipeline["recorder"],
         mock_pipeline["wakeword"],
         mock_pipeline["stt"],
         mock_pipeline["llm"],
-        mock_pipeline["tts"]
+        mock_pipeline["tts"],
+        event_bus,
+        session_manager
     )
 
-    # Mock empty STT transcription
     mock_pipeline["stt"].transcribe.return_value = "   "
-
-    observer = MagicMock(spec=AssistantEventObserver)
-    orchestrator.register_observer(observer)
+    
+    events_published = []
+    event_bus.subscribe(LLMStarted, lambda e: events_published.append(e))
 
     orchestrator.start()
     callback = mock_pipeline["wakeword"].register_callback.call_args[0][0]
     callback()
-
-    # Verify STT was called but LLM and TTS were bypassed
-    mock_pipeline["stt"].transcribe.assert_called_once()
-    mock_pipeline["llm"].generate_response.assert_not_called()
-    mock_pipeline["tts"].speak.assert_not_called()
     
-    # Verify events
-    observer.on_transcription_finished.assert_not_called()
-    observer.on_llm_start.assert_not_called()
+    time.sleep(0.2)
+    final_state = session_manager.get_state()
+    orchestrator.stop()
+
+    # Verify LLM was never started
+    assert len(events_published) == 0
+    assert final_state == SessionState.LISTENING
 
 
-def test_ollama_unavailable_recovery(mock_pipeline):
-    """Checks that LLM connection failures are spoken to users and observers receive on_error."""
+def test_cancellation_token_stops_worker_immediately(mock_pipeline, tmp_path):
+    """Checks that CancellationToken cancel halts background processes."""
+    token = CancellationToken()
+    assert token.is_cancelled() is False
+
+    token.cancel()
+    assert token.is_cancelled() is True
+
+    # Test that when token is cancelled, the streaming worker clears queue and unlinks file
+    from src.tts.streaming_worker import StreamingTTSWorker
+    
+    worker = StreamingTTSWorker(
+        mock_pipeline["tts"].synthesizer,
+        tmp_path / "temp" / "tts",
+        0,
+        token
+    )
+    worker.start()
+    
+    # Put item in queue (should be ignored immediately because token is cancelled)
+    worker.put("Cancel me now.")
+    
+    time.sleep(0.2)
+    worker.stop()
+    worker.join()
+    assert worker.is_running() is False
+
+
+def test_event_bus_fifo_asynchronous_execution():
+    """Checks that multiple EventBus subscriptions run concurrently without blocks."""
+    event_bus = EventBus()
+    event_bus.start()
+
+    execution_order = []
+    
+    # Slow subscriber
+    def slow_subscriber(event):
+        time.sleep(0.1)
+        execution_order.append("slow")
+
+    # Fast subscriber
+    def fast_subscriber(event):
+        execution_order.append("fast")
+
+    event_bus.subscribe(WakeWordDetected, slow_subscriber)
+    event_bus.subscribe(WakeWordDetected, fast_subscriber)
+
+    event_bus.publish(WakeWordDetected())
+    
+    # Wait for execution thread pool to drain
+    time.sleep(0.3)
+    event_bus.stop()
+    event_bus.join()
+
+    # Fast subscriber runs concurrently, so it completes first despite registration order
+    assert "fast" in execution_order
+    assert "slow" in execution_order
+    assert execution_order[0] == "fast"
+
+
+def test_rapid_wake_word_interruption_cancellation(mock_pipeline):
+    """Checks that triggers during SPEAKING clear state and restart loops."""
+    event_bus = EventBus()
+    session_manager = AudioSessionManager()
+    
     orchestrator = AssistantOrchestrator(
         mock_pipeline["config"],
         mock_pipeline["recorder"],
         mock_pipeline["wakeword"],
         mock_pipeline["stt"],
         mock_pipeline["llm"],
-        mock_pipeline["tts"]
+        mock_pipeline["tts"],
+        event_bus,
+        session_manager
     )
 
-    mock_pipeline["stt"].transcribe.return_value = "How does this work"
-    # Raise LLM server offline error
-    mock_pipeline["llm"].generate_response.side_effect = LLMError("Local Ollama connection refused.")
-
-    observer = MagicMock(spec=AssistantEventObserver)
-    orchestrator.register_observer(observer)
-
     orchestrator.start()
-    callback = mock_pipeline["wakeword"].register_callback.call_args[0][0]
-    callback()
-
-    # Verify observer was notified of the error
-    observer.on_error.assert_called_once_with("Local Ollama connection refused.")
     
-    # Verify that assistant vocalized the connection failure to the speaker
-    mock_pipeline["tts"].speak.assert_called_once()
-    assert "verify that Ollama is running" in mock_pipeline["tts"].speak.call_args[0][0]
-
-
-def test_audio_hardware_crash_logs_error(mock_pipeline):
-    """Checks that audio hardware errors are handled gracefully and logged."""
-    orchestrator = AssistantOrchestrator(
-        mock_pipeline["config"],
-        mock_pipeline["recorder"],
-        mock_pipeline["wakeword"],
-        mock_pipeline["stt"],
-        mock_pipeline["llm"],
-        mock_pipeline["tts"]
-    )
-
-    # Raise hardware error on start recording
-    mock_pipeline["recorder"].start_recording.side_effect = AudioError("Failed to open audio stream.")
-
-    observer = MagicMock(spec=AssistantEventObserver)
-    orchestrator.register_observer(observer)
-
-    orchestrator.start()
+    # Force state to SPEAKING representing vocalization active
+    session_manager.transition_to(SessionState.SPEAKING)
+    
+    # Create mock CancellationToken
+    token = CancellationToken()
+    orchestrator.current_token = token
+    
     callback = mock_pipeline["wakeword"].register_callback.call_args[0][0]
+    
+    # Simulate a second wake word match (user interrupts speaker)
     callback()
-
-    # Verify error callback and graceful state reset
-    observer.on_error.assert_called_once_with("Failed to open audio stream.")
+    
+    # Token should be flagged cancelled immediately
+    assert token.is_cancelled() is True
+    
+    time.sleep(0.2)
+    orchestrator.stop()

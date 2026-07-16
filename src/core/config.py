@@ -69,6 +69,7 @@ class TTSConfig:
     model_path: Path
     config_path: Path
     output_dir: Path
+    min_chunk_chars: int = 20
 
 
 @dataclass
@@ -213,7 +214,8 @@ class Config:
             )),
             output_dir=self.resolve_path(tts_data.get(
                 "output_dir", "temp/tts"
-            ))
+            )),
+            min_chunk_chars=int(tts_data.get("min_chunk_chars", 20))
         )
         
         # 7. Parse Setup Config
